@@ -39,30 +39,54 @@ beforeEach(function () {
         $table->string('objname');
         $table->string('name');
     });
-    Schema::connection('legacy')->create('userroles', function (Blueprint $table) { $table->integer('userId'); $table->integer('roleId'); });
-    Schema::connection('legacy')->create('treeroles', function (Blueprint $table) { $table->integer('roleid'); $table->integer('treeid'); });
+    Schema::connection('legacy')->create('userroles', function (Blueprint $table) {
+        $table->integer('userId');
+        $table->integer('roleId');
+    });
+    Schema::connection('legacy')->create('treeroles', function (Blueprint $table) {
+        $table->integer('roleid');
+        $table->integer('treeid');
+    });
     Schema::connection('legacy')->create('gz_dpleaders', function (Blueprint $table) {
-        $table->integer('departmentid'); $table->integer('userId'); $table->string('yndelete');
+        $table->integer('departmentid');
+        $table->integer('userId');
+        $table->string('yndelete');
     });
     Schema::connection('legacy')->create('modules', function (Blueprint $table) {
-        $table->integer('Id')->primary(); $table->string('dbTable'); $table->integer('isuse');
-        $table->string('userIds'); $table->string('ModuleName');
+        $table->integer('Id')->primary();
+        $table->string('dbTable');
+        $table->integer('isuse');
+        $table->string('userIds');
+        $table->string('ModuleName');
     });
     Schema::connection('legacy')->create('workflowmodule_users', function (Blueprint $table) {
-        $table->integer('workflowModuleId'); $table->integer('UserId'); $table->integer('SeriaNo');
+        $table->integer('workflowModuleId');
+        $table->integer('UserId');
+        $table->integer('SeriaNo');
     });
     Schema::connection('legacy')->create('gz_auditors', function (Blueprint $table) {
-        $table->increments('Id'); $table->string('tablename'); $table->integer('tableId');
-        $table->integer('auditorId'); $table->string('auditorName'); $table->integer('step');
-        $table->string('workflowType')->nullable(); $table->integer('workflowId')->nullable();
-        $table->integer('workflowUserid')->nullable(); $table->integer('creatorid')->nullable();
-        $table->string('auditorIds')->nullable(); $table->string('AuditorNames')->nullable();
+        $table->increments('Id');
+        $table->string('tablename');
+        $table->integer('tableId');
+        $table->integer('auditorId');
+        $table->string('auditorName');
+        $table->integer('step');
+        $table->string('workflowType')->nullable();
+        $table->integer('workflowId')->nullable();
+        $table->integer('workflowUserid')->nullable();
+        $table->integer('creatorid')->nullable();
+        $table->string('auditorIds')->nullable();
+        $table->string('AuditorNames')->nullable();
     });
     Schema::connection('legacy')->create('ud10', function (Blueprint $table) {
-        $table->integer('Id')->primary(); $table->string('name'); $table->integer('xuhao');
+        $table->integer('Id')->primary();
+        $table->string('name');
+        $table->integer('xuhao');
     });
     Schema::connection('legacy')->create('ud09', function (Blueprint $table) {
-        $table->integer('Id')->primary(); $table->string('name'); $table->integer('xuhao');
+        $table->integer('Id')->primary();
+        $table->string('name');
+        $table->integer('xuhao');
     });
     Schema::connection('legacy')->create('a34', function (Blueprint $table) {
         $table->increments('Id');
@@ -72,7 +96,8 @@ beforeEach(function () {
         $table->integer('CreatorId')->nullable();
     });
     Schema::connection('legacy')->create('a35', function (Blueprint $table) {
-        $table->increments('Id'); $table->integer('parentid');
+        $table->increments('Id');
+        $table->integer('parentid');
         foreach (['a3501', 'a3502', 'a3503', 'a3504', 'a3505', 'a3506', 'a3508', 'a3509', 'a3511', 'a3537', 'a3552', 'yndelete'] as $field) {
             $table->string($field)->nullable();
         }
@@ -86,12 +111,24 @@ beforeEach(function () {
         $table->integer('CreatorId')->nullable();
     });
     Schema::create('leave_events', function (Blueprint $table) {
-        $table->increments('id'); $table->string('source'); $table->string('kind'); $table->integer('legacy_id');
-        $table->integer('actor_user_id'); $table->string('action'); $table->string('note')->nullable(); $table->timestamp('created_at');
+        $table->increments('id');
+        $table->string('source');
+        $table->string('kind');
+        $table->integer('legacy_id');
+        $table->integer('actor_user_id');
+        $table->string('action');
+        $table->string('note')->nullable();
+        $table->timestamp('created_at');
     });
     Schema::create('leave_attachments', function (Blueprint $table) {
-        $table->increments('id'); $table->string('source'); $table->integer('legacy_detail_id'); $table->string('path');
-        $table->string('original_name'); $table->string('mime'); $table->integer('size'); $table->timestamp('created_at');
+        $table->increments('id');
+        $table->string('source');
+        $table->integer('legacy_detail_id');
+        $table->string('path');
+        $table->string('original_name');
+        $table->string('mime');
+        $table->integer('size');
+        $table->timestamp('created_at');
     });
 
     DB::connection('legacy')->table('user')->insert([
@@ -132,7 +169,9 @@ beforeEach(function () {
 });
 
 afterEach(function () {
-    DB::disconnect('legacy'); DB::disconnect('legacy_leave_writer'); @unlink($this->leaveDb);
+    DB::disconnect('legacy');
+    DB::disconnect('legacy_leave_writer');
+    @unlink($this->leaveDb);
 });
 
 function leaveVersion(string $kind, int $id): string
@@ -271,4 +310,20 @@ test('a legacy edit to a detail invalidates an open draft form', function () {
             'start' => '2026-12-03', 'end' => '2026-12-04'],
     ]])->assertStatus(409);
     expect(DB::connection('legacy')->table('a35')->where('Id', $detailId)->value('a3505'))->toBe('旧系统已修改');
+});
+
+test('new private leave attachments work without a public sharing URL and remain authorized', function () {
+    Storage::fake('local');
+    config()->set('leave.private_attachments', true);
+    config()->set('leave.public_attachment_url', '');
+    Schema::table('leave_attachments', fn (Blueprint $table) => $table->string('disk')->default('public'));
+    $this->actingAs(User::find(1))->post('/personnel/leave', ['details' => [
+        ['person_id' => 1, 'leave_type' => 1, 'time_type' => 3, 'start' => '2026-12-01',
+            'end' => '2026-12-02', 'attachment' => UploadedFile::fake()->create('proof.pdf', 2, 'application/pdf')],
+    ]])->assertRedirect();
+    $file = DB::table('leave_attachments')->first();
+    expect($file->disk)->toBe('local');
+    Storage::disk('local')->assertExists($file->path);
+    $this->get('/personnel/leave/attachments/'.$file->legacy_detail_id)->assertOk();
+    $this->actingAs(User::find(5))->get('/personnel/leave/attachments/'.$file->legacy_detail_id)->assertForbidden();
 });

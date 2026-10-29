@@ -20,6 +20,15 @@ class LegacyPortrait
         if ($url === null) {
             return null;
         }
+        $local = app(MigratedLegacyFiles::class)->fetch($url);
+        if ($local !== null) {
+            $image = @getimagesizefromstring($local['content']);
+
+            return in_array($image['mime'] ?? null, ['image/jpeg', 'image/png', 'image/gif'], true) ? $local : null;
+        }
+        if (config('legacy_files.enabled') && ! config('legacy_files.remote_fallback')) {
+            return null;
+        }
 
         try {
             $response = Http::timeout(8)->withOptions(['allow_redirects' => false])->get($url);
@@ -51,6 +60,9 @@ class LegacyPortrait
             ->pluck('h5504');
 
         foreach ($references as $reference) {
+            if (config('legacy_files.enabled') && ($canonical = app(MigratedLegacyFiles::class)->canonicalUrl($reference)) !== null) {
+                return $canonical;
+            }
             if (! preg_match('~https?://[^\s]+$~u', (string) $reference, $match)) {
                 continue;
             }

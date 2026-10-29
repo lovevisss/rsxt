@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\LeaveAccess;
 use App\Services\LeaveWriter;
 use App\Services\LegacyAccess;
+use App\Services\MigratedLegacyFiles;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -224,11 +225,18 @@ class LeaveController extends Controller
             || (string) $detail->a3511 === (string) $request->user()->Id || $assigned, 403);
         $local = DB::table('leave_attachments')->where('source', $this->writer->sourceName())
             ->where('legacy_detail_id', $id)->latest('id')->first();
-        if ($local && Storage::disk('public')->exists($local->path)) {
-            return response(Storage::disk('public')->get($local->path))
+        if ($local && Storage::disk($local->disk ?? 'public')->exists($local->path)) {
+            return response(Storage::disk($local->disk ?? 'public')->get($local->path))
                 ->header('Content-Type', $local->mime)->header('Cache-Control', 'private, no-store')
                 ->header('X-Content-Type-Options', 'nosniff');
         }
+        $migrated = app(MigratedLegacyFiles::class)->fetch($detail->a3509);
+        if ($migrated !== null) {
+            return response($migrated['content'])->header('Content-Type', $migrated['mime'])
+                ->header('Content-Disposition', 'attachment; filename="legacy-attachment-'.$id.'"')
+                ->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff');
+        }
+        abort_if(config('legacy_files.enabled') && ! config('legacy_files.remote_fallback'), 404);
         preg_match('~https?://[^\s]+~u', (string) $detail->a3509, $matches);
         $url = $matches[0] ?? '';
         abort_if($url === '' || parse_url($url, PHP_URL_HOST) !== config('leave.legacy_attachment_host'), 404);
@@ -272,7 +280,7 @@ class LeaveController extends Controller
             if ($end->lt($start) || ((int) $entry['time_type'] !== 3 && ! $end->isSameDay($start))) {
                 throw ValidationException::withMessages(['details' => '结束日期不能早于开始日期，半天假只能选同一天。']);
             }
-            if (! empty($entry['attachment']) && ! config('leave.public_attachment_url')) {
+            if (! empty($entry['attachment']) && ! config('leave.private_attachments') && ! config('leave.public_attachment_url')) {
                 throw ValidationException::withMessages(['details' => '附件共享地址尚未配置，暂不能上传。']);
             }
             $people[] = $person;
@@ -293,7 +301,9 @@ class LeaveController extends Controller
                     'issubmit' => 'n', 'a3452' => 'n', 'yndelete' => '0',
                 ]);
             }
-            $firstDate = min(array_column($data['details'], 'start'));
+            $startDates = array_column($data['details'], 'start');
+            abort_if($startDates === [], 422, '请至少填写一条请假明细。');
+            $firstDate = min($startDates);
             $delegated = collect($people)->contains(fn ($person) => (int) $person->userId !== (int) $actor->Id);
             $db->table('a34')->where('Id', $id)->update([
                 'a3410' => $delegated ? '2' : '1', 'a3413' => str_replace('-', '', substr($firstDate, 0, 7)),
@@ -325,18 +335,24 @@ class LeaveController extends Controller
                 $retained[] = $detailId;
                 if (! empty($entry['attachment'])) {
                     $file = $entry['attachment'];
-                    $path = $file->storePublicly('leave', 'public');
+                    $private = config('leave.private_attachments');
+                    $disk = $private ? 'local' : 'public';
+                    $path = $private ? $file->store('leave', 'local') : $file->storePublicly('leave', 'public');
                     abort_if($path === false, 503, '附件保存失败。');
-                    $url = rtrim(config('leave.public_attachment_url'), '/').'/'.$path;
+                    $url = $private ? 'rsxt-private:'.basename($path) : rtrim(config('leave.public_attachment_url'), '/').'/'.$path;
                     $name = basename($path);
                     abort_if(strlen($name.$url) > 255, 422, '附件地址过长。');
                     $db->table('a35')->where('Id', $detailId)->update(['a3509' => $name.$url]);
-                    DB::table('leave_attachments')->insert([
+                    $attachment = [
                         'source' => $this->writer->sourceName(),
                         'legacy_detail_id' => $detailId, 'path' => $path,
                         'original_name' => $file->getClientOriginalName(),
                         'mime' => $file->getMimeType(), 'size' => $file->getSize(), 'created_at' => now(),
-                    ]);
+                    ];
+                    if ($private) {
+                        $attachment['disk'] = $disk;
+                    }
+                    DB::table('leave_attachments')->insert($attachment);
                 }
             }
             if ($oldIds) {
@@ -524,12 +540,13 @@ class LeaveController extends Controller
             $next = $db->table('gz_auditors')->where('tablename', $kind)->where('tableId', $id)
                 ->where('step', '>', $current->step)->orderBy('step')->first();
             $resultField = $kind === 'a34' ? 'a3406' : 'a3811';
+            $result = trim((string) $row->{$resultField}."\n".$message);
             $update = [
-                $resultField => trim((string) $row->{$resultField}."\n".$message),
+                $resultField => $result,
                 $kind === 'a34' ? 'a3433' : 'a3833' => $next ? $next->auditorName : '审批结束',
                 'updateTime' => now(),
             ];
-            abort_if(mb_strlen($update[$resultField]) > ($kind === 'a34' ? 1000 : 255), 422, '审批结果已达到旧库字段长度上限。');
+            abort_if(mb_strlen($result) > ($kind === 'a34' ? 1000 : 255), 422, '审批结果已达到旧库字段长度上限。');
             if (! $next && $kind === 'a34') {
                 $update['a3452'] = 'y';
                 $db->table('a35')->where('parentid', $id)->where('yndelete', '0')->update(['a3552' => 'y']);
@@ -634,7 +651,7 @@ class LeaveController extends Controller
     {
         return $request->session()->get('personnel_preview') === true
             || (app()->environment('local') && config('personnel.local_preview')
-                && ! config('personnel.cas.validate_url'));
+                && ! config('cas.service_url'));
     }
 
     private function requireWrite(Request $request): void

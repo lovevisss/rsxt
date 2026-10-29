@@ -3,11 +3,13 @@
 use App\Models\User;
 use App\Services\LegacyReadOnlyGuard;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia as Assert;
+use Lovevisss\LaravelZufedfcCas\Testing\CasResponse;
 
 beforeEach(function () {
     config()->set('database.connections.legacy', [
@@ -90,6 +92,7 @@ test('a query string user id cannot authenticate a visitor', function () {
 });
 
 test('unconfigured portal shows a login page and local preview requires a signed URL', function () {
+    config()->set('cas.service_url', null);
     config()->set('personnel.local_preview', true);
     config()->set('personnel.preview_user_id', 1);
     app()->detectEnvironment(fn () => 'local');
@@ -105,6 +108,7 @@ test('unconfigured portal shows a login page and local preview requires a signed
 });
 
 test('local preview stays disabled outside local environment', function () {
+    config()->set('cas.service_url', null);
     config()->set('personnel.local_preview', true);
     config()->set('personnel.preview_user_id', 1);
     app()->detectEnvironment(fn () => 'production');
@@ -115,12 +119,75 @@ test('local preview stays disabled outside local environment', function () {
 });
 
 test('CAS ticket validation logs in an enabled legacy user', function () {
-    config()->set('personnel.cas.validate_url', 'https://portal.example.test/cas/serviceValidate');
-    config()->set('personnel.cas.service_url', 'https://hr.example.test/sso/callback');
+    config()->set('cas.base_url', 'https://portal.example.test/cas');
+    config()->set('cas.service_url', 'https://hr.example.test/sso/callback');
     Http::fake(['portal.example.test/*' => Http::response('<cas:serviceResponse xmlns:cas="http://www.yale.edu/tp/cas"><cas:authenticationSuccess><cas:user>E001</cas:user></cas:authenticationSuccess></cas:serviceResponse>')]);
 
+    $sessionBefore = app('session')->driver()->getId();
     $this->get('/sso/callback?ticket=ST-valid')->assertRedirect(route('dashboard'));
     $this->assertAuthenticatedAs(User::find(1));
+    expect(app('session')->driver()->getId())->not->toBe($sessionBefore);
+    expect(Cache::has('cas:slo:'.hash('sha256', 'ST-valid')))->toBeTrue();
+    Http::assertSent(fn ($request) => $request->data()['service'] === 'https://hr.example.test/sso/callback');
+});
+
+test('CAS login uses the exact configured service URL', function () {
+    config()->set('cas.service_url', 'https://hr.example.test/sso/callback');
+    config()->set('cas.base_url', 'https://portal.example.test/cas');
+
+    $response = $this->get('/login?returnUrl=https://evil.example.test');
+    $response->assertRedirect('https://portal.example.test/cas/login?service=https%3A%2F%2Fhr.example.test%2Fsso%2Fcallback');
+});
+
+test('CAS callback rejects disabled, missing, and unauthorized accounts', function () {
+    config()->set('cas.service_url', 'https://hr.example.test/sso/callback');
+    config()->set('cas.base_url', 'https://portal.example.test/cas');
+    DB::connection('legacy')->getPdo()->exec('UPDATE user SET isUse = 0 WHERE Id = 2');
+
+    foreach (['E002', 'MISSING'] as $account) {
+        Http::fake(['portal.example.test/*' => Http::response(CasResponse::success($account))]);
+        $this->get('/sso/callback?ticket=ST-test')->assertForbidden();
+        $this->assertGuest();
+    }
+
+    DB::connection('legacy')->getPdo()->exec('UPDATE user SET isUse = 1 WHERE Id = 2');
+    Http::fake(['portal.example.test/*' => Http::response(CasResponse::success('E002'))]);
+    $this->get('/sso/callback?ticket=ST-test')->assertForbidden();
+    $this->assertGuest();
+});
+
+test('CAS callback rejects invalid XML and validation failures', function () {
+    config()->set('cas.service_url', 'https://hr.example.test/sso/callback');
+    config()->set('cas.base_url', 'https://portal.example.test/cas');
+
+    foreach ([CasResponse::failure(), '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>', '<broken'] as $xml) {
+        Http::fake(['portal.example.test/*' => Http::response($xml)]);
+        $this->get('/sso/callback?ticket=ST-test')->assertForbidden();
+        $this->assertGuest();
+    }
+});
+
+test('CAS callback handles an unavailable validation service', function () {
+    config()->set('cas.service_url', 'https://hr.example.test/sso/callback');
+    config()->set('cas.base_url', 'https://portal.example.test/cas');
+    Http::fake(['portal.example.test/*' => Http::response('', 503)]);
+
+    $this->get('/sso/callback?ticket=ST-test')->assertStatus(502);
+    $this->assertGuest();
+});
+
+test('CAS logout redirects through CAS and the SLO endpoint accepts standard requests', function () {
+    config()->set('cas.service_url', 'https://hr.example.test/sso/callback');
+    config()->set('cas.base_url', 'https://portal.example.test/cas');
+    config()->set('cas.post_logout_url', 'https://hr.example.test/');
+
+    $logoutRequest = '<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"><samlp:SessionIndex>ST-test</samlp:SessionIndex></samlp:LogoutRequest>';
+    $this->post('/auth/cas/slo', ['logoutRequest' => $logoutRequest])->assertOk()->assertJsonPath('data.success', true);
+    $this->get('/auth/cas/slo?callback=casLogout')->assertOk()->assertSee('casLogout(', false);
+
+    $this->actingAs(User::find(1))->post('/logout')
+        ->assertRedirect('https://portal.example.test/cas/logout?service=https%3A%2F%2Fhr.example.test%2F');
+    $this->assertGuest();
 });
 
 test('menu permission and employee number isolate personal records', function () {

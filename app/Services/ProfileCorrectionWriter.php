@@ -43,6 +43,8 @@ class ProfileCorrectionWriter
     public function apply(stdClass $request, array $changes): void
     {
         $connection = DB::connection($this->connectionName());
+        $transactionalIdentity = config('profile_corrections.transactional_identity')
+            && config('profile_corrections.write_target') === 'production';
         $newName = null;
         foreach ($changes as $change) {
             if ($change->field_key === 'h5001') {
@@ -54,7 +56,7 @@ class ProfileCorrectionWriter
                 }
             }
         }
-        $connection->transaction(function () use ($connection, $request, $changes): void {
+        $connection->transaction(function () use ($connection, $request, $changes, $newName, $transactionalIdentity): void {
             $profile = $connection->table('h50')->where('Id', $request->legacy_profile_id)
                 ->where('h5002', $request->employee_number)->where('yndelete', '0')
                 ->lockForUpdate()->first();
@@ -78,8 +80,19 @@ class ProfileCorrectionWriter
                     ->where('h5002', $request->employee_number)
                     ->update([...$updates, 'updateTime' => now()]);
             }
+            if ($newName !== null && $transactionalIdentity) {
+                $identity = $connection->table('user')->where('Id', $request->applicant_user_id)
+                    ->where('username', $request->employee_number)->lockForUpdate()->first();
+                if ($identity === null) {
+                    throw new ProfileCorrectionConflict('The matching portal identity is unavailable.');
+                }
+                if ($identity->truename !== $newName) {
+                    $connection->table('user')->where('Id', $request->applicant_user_id)
+                        ->where('username', $request->employee_number)->update(['truename' => $newName]);
+                }
+            }
         });
-        if ($newName !== null) {
+        if ($newName !== null && ! $transactionalIdentity) {
             // The legacy user table is MyISAM, so this step runs after the h50 transaction.
             // A failure remains retryable: h50 then matches all new values on the next attempt.
             $identity = $connection->table('user')->where('Id', $request->applicant_user_id)

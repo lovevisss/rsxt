@@ -4,6 +4,7 @@ return [
     // Keep production writes opt-in, separate from the general legacy read connection.
     'write_target' => env('PROFILE_CORRECTION_WRITE_TARGET', 'disabled'), // disabled, stage, production
     'production_writes_enabled' => env('PROFILE_CORRECTION_PRODUCTION_WRITES_ENABLED', false),
+    'transactional_identity' => env('PROFILE_CORRECTION_TRANSACTIONAL_IDENTITY', false),
     'fields' => [
         'basic' => ['h5001', 'h5090', 'h5005', 'h5065', 'h5006', 'h5079', 'h5009', 'h5011', 'h5052'],
         'work' => ['h5012', 'h5013'],

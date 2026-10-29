@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\LegacyAccess;
-use App\Services\LegacyFields;
 use App\Services\LegacyPortrait;
 use App\Services\LegacyProfileSections;
 use App\Services\LegacyProfileValues;
@@ -18,7 +17,7 @@ use Inertia\Response;
 
 class PersonnelController extends Controller
 {
-    public function __construct(private readonly LegacyAccess $access, private readonly LegacyFields $fields, private readonly LegacyProfileValues $profileValues, private readonly LegacyProfileSections $profileSections, private readonly LegacyPortrait $portrait) {}
+    public function __construct(private readonly LegacyAccess $access, private readonly LegacyProfileValues $profileValues, private readonly LegacyProfileSections $profileSections, private readonly LegacyPortrait $portrait) {}
 
     public function dashboard(Request $request): Response
     {

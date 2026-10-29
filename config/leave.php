@@ -5,4 +5,5 @@ return [
     'production_writes_enabled' => env('LEAVE_PRODUCTION_WRITES_ENABLED', false),
     'legacy_attachment_host' => env('LEAVE_LEGACY_ATTACHMENT_HOST', 'rsgl.zufedfc.edu.cn'),
     'public_attachment_url' => env('LEAVE_PUBLIC_ATTACHMENT_URL', ''),
+    'private_attachments' => env('LEAVE_PRIVATE_ATTACHMENTS', false),
 ];

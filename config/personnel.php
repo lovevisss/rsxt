@@ -5,12 +5,6 @@ return [
     'stage_database' => env('LEGACY_STAGE_DATABASE', 'uchr_stage'),
     'local_preview' => env('PERSONNEL_LOCAL_PREVIEW', false),
     'preview_user_id' => env('PERSONNEL_PREVIEW_USER_ID'),
-    'cas' => [
-        'login_url' => env('CAS_LOGIN_URL'),
-        'validate_url' => env('CAS_VALIDATE_URL'),
-        'logout_url' => env('CAS_LOGOUT_URL'),
-        'service_url' => env('CAS_SERVICE_URL'),
-    ],
     'modules' => [
         'profile' => ['menu_id' => 303, 'table' => 'h50', 'title' => '个人信息'],
         'corrections' => ['menu_id' => 333, 'all_menu_ids' => [303, 333], 'table' => 'h50', 'title' => '更正申请'],

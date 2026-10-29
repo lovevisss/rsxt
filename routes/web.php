@@ -6,12 +6,16 @@ use App\Http\Controllers\PersonnelController;
 use App\Http\Controllers\PersonnelHistoryController;
 use App\Http\Controllers\PortalAuthController;
 use App\Http\Controllers\ProfileCorrectionController;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
+use Lovevisss\LaravelZufedfcCas\Http\Controllers\SloController;
 
 Route::redirect('/', '/dashboard')->name('home');
 Route::get('/login', [PortalAuthController::class, 'login'])->name('login');
 Route::get('/preview', [PortalAuthController::class, 'preview'])->middleware('signed:relative')->name('preview.login');
 Route::get('/sso/callback', [PortalAuthController::class, 'callback'])->name('sso.callback');
+Route::match(['GET', 'POST'], '/auth/cas/slo', SloController::class)
+    ->withoutMiddleware(PreventRequestForgery::class)->name('cas.slo');
 Route::post('/logout', [PortalAuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {

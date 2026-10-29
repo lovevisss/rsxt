@@ -9,6 +9,15 @@ class LegacyCertificate
     /** @return array{content:string,mime:string}|null */
     public function fetch(mixed $reference): ?array
     {
+        $local = app(MigratedLegacyFiles::class)->fetch($reference);
+        if ($local !== null) {
+            $image = @getimagesizefromstring($local['content']);
+
+            return in_array($image['mime'] ?? null, ['image/jpeg', 'image/png', 'image/gif'], true) ? $local : null;
+        }
+        if (config('legacy_files.enabled') && ! config('legacy_files.remote_fallback')) {
+            return null;
+        }
         if (! preg_match('~https?://[^\s]+$~u', trim((string) $reference), $match)) {
             return null;
         }

@@ -237,7 +237,7 @@ class AssessmentController extends Controller
     {
         return $request->session()->get('personnel_preview') === true
             || (app()->environment('local') && config('personnel.local_preview')
-                && ! config('personnel.cas.validate_url'));
+                && ! config('cas.service_url'));
     }
 
     /** @param array<string, string> $updates */

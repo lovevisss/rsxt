@@ -183,7 +183,7 @@ test('older local preview sessions without a flag remain read only', function ()
     app()->detectEnvironment(fn () => 'local');
     $this->withoutMiddleware(PreventRequestForgery::class);
     config()->set('personnel.local_preview', true);
-    config()->set('personnel.cas.validate_url', null);
+    config()->set('cas.service_url', null);
     $this->actingAs(correctionUser(1))->post('/personnel/corrections', [
         'reason' => '预览', 'changes' => ['h5084' => '新地址'],
     ])->assertForbidden();

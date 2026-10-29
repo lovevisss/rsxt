@@ -184,7 +184,7 @@ class ProfileCorrectionController extends Controller
     {
         return $request->session()->get('personnel_preview') === true
             || (app()->environment('local') && config('personnel.local_preview')
-                && ! config('personnel.cas.validate_url'));
+                && ! config('cas.service_url'));
     }
 
     private function findReviewable(Request $request, int $id): stdClass

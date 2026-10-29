@@ -2,26 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Auth\CasIdentityResolver;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Lovevisss\LaravelZufedfcCas\CasClient;
+use Lovevisss\LaravelZufedfcCas\Exceptions\CasUnavailableException;
+use Lovevisss\LaravelZufedfcCas\Exceptions\InvalidTicketException;
+use Lovevisss\LaravelZufedfcCas\SessionRegistry;
 
 class PortalAuthController extends Controller
 {
-    public function login(Request $request): RedirectResponse|Response
+    public function login(Request $request, CasClient $cas): RedirectResponse|Response
     {
         if (Auth::check()) {
             return redirect()->route('dashboard');
         }
 
-        $loginUrl = config('personnel.cas.login_url');
-        if (! $loginUrl || ! config('personnel.cas.validate_url')) {
+        if (! config('cas.service_url')) {
             return Inertia::render('Personnel/Login', [
                 'previewUrl' => $this->canPreview($request)
                     ? URL::temporarySignedRoute('preview.login', now()->addMinutes(5), absolute: false)
@@ -29,9 +32,7 @@ class PortalAuthController extends Controller
             ]);
         }
 
-        $service = $this->serviceUrl();
-
-        return redirect()->away($loginUrl.(str_contains($loginUrl, '?') ? '&' : '?').http_build_query(['service' => $service]));
+        return redirect()->away($cas->loginUrl());
     }
 
     public function preview(Request $request): RedirectResponse
@@ -48,48 +49,39 @@ class PortalAuthController extends Controller
         return redirect()->route('dashboard');
     }
 
-    public function callback(Request $request): RedirectResponse
+    public function callback(Request $request, CasClient $cas, CasIdentityResolver $resolver, SessionRegistry $sessions): RedirectResponse
     {
         $ticket = $request->query('ticket');
         abort_unless(is_string($ticket) && Str::length($ticket) <= 1024 && preg_match('/^ST-[A-Za-z0-9._-]+$/', $ticket), 400);
 
-        $validateUrl = config('personnel.cas.validate_url');
-        abort_unless($validateUrl, 503, '信息门户单点登录尚未配置。');
+        abort_unless(config('cas.service_url'), 503, '信息门户单点登录尚未配置。');
 
-        $response = Http::timeout(8)->get($validateUrl, [
-            'service' => $this->serviceUrl(),
-            'ticket' => $ticket,
-        ]);
+        try {
+            $identity = $cas->validateTicket($ticket);
+        } catch (CasUnavailableException) {
+            abort(502, '信息门户认证服务不可用。');
+        } catch (InvalidTicketException) {
+            abort(403, '信息门户认证失败。');
+        }
 
-        abort_unless($response->successful() && strlen($response->body()) < 65536, 502, '信息门户认证服务不可用。');
-
-        $username = $this->validatedPrincipal($response->body());
-        abort_unless($username !== null, 403, '信息门户认证失败。');
-
-        $user = User::query()->where('username', $username)->where('isUse', 1)->first();
+        $user = $resolver->resolve($identity);
         abort_unless($user !== null, 403, '该门户账号没有可用的人事系统身份。');
 
         Auth::login($user);
         $request->session()->regenerate();
         $request->session()->forget('personnel_preview');
+        $sessions->remember($ticket, $request->session()->getId());
 
-        return redirect()->intended(route('dashboard'));
+        return redirect()->route('dashboard');
     }
 
-    public function logout(Request $request): RedirectResponse
+    public function logout(Request $request, CasClient $cas): RedirectResponse
     {
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        $logoutUrl = config('personnel.cas.logout_url');
-
-        return $logoutUrl ? redirect()->away($logoutUrl) : redirect()->route('home');
-    }
-
-    private function serviceUrl(): string
-    {
-        return config('personnel.cas.service_url') ?: route('sso.callback');
+        return config('cas.service_url') ? redirect()->away($cas->logoutUrl()) : redirect()->route('home');
     }
 
     private function canPreview(Request $request): bool
@@ -98,24 +90,5 @@ class PortalAuthController extends Controller
             && (bool) config('personnel.local_preview')
             && filled(config('personnel.preview_user_id'))
             && in_array($request->ip(), ['127.0.0.1', '::1'], true);
-    }
-
-    private function validatedPrincipal(string $xml): ?string
-    {
-        $previous = libxml_use_internal_errors(true);
-        try {
-            $document = simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NONET);
-            if ($document === false) {
-                return null;
-            }
-
-            $matches = $document->xpath('//*[local-name()="authenticationSuccess"]/*[local-name()="user"]');
-            $principal = trim((string) ($matches[0] ?? ''));
-
-            return $principal !== '' && strlen($principal) <= 100 ? $principal : null;
-        } finally {
-            libxml_clear_errors();
-            libxml_use_internal_errors($previous);
-        }
     }
 }

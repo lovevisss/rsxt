@@ -10,6 +10,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * @property int $Id
  * @property string $username
  * @property int $IsSA
+ * @property string $truename
+ * @property int $departmentId
  */
 class User extends Authenticatable
 {

@@ -1,0 +1,61 @@
+<?php
+
+use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\LeaveController;
+use App\Http\Controllers\PersonnelController;
+use App\Http\Controllers\PersonnelHistoryController;
+use App\Http\Controllers\PortalAuthController;
+use App\Http\Controllers\ProfileCorrectionController;
+use Illuminate\Support\Facades\Route;
+
+Route::redirect('/', '/dashboard')->name('home');
+Route::get('/login', [PortalAuthController::class, 'login'])->name('login');
+Route::get('/preview', [PortalAuthController::class, 'preview'])->middleware('signed:relative')->name('preview.login');
+Route::get('/sso/callback', [PortalAuthController::class, 'callback'])->name('sso.callback');
+Route::post('/logout', [PortalAuthController::class, 'logout'])->middleware('auth')->name('logout');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', [PersonnelController::class, 'dashboard'])->name('dashboard');
+    Route::get('/personnel/profile', [PersonnelController::class, 'profile'])->name('personnel.profile');
+    Route::get('/personnel/profile/portrait', [PersonnelController::class, 'portrait'])->name('personnel.profile.portrait');
+    Route::get('/personnel/profile/print', [PersonnelController::class, 'printProfile'])->name('personnel.profile.print');
+    Route::get('/personnel/profile/pdf', [PersonnelController::class, 'downloadProfile'])->name('personnel.profile.pdf');
+    Route::get('/personnel/corrections', [ProfileCorrectionController::class, 'index'])->name('personnel.corrections.index');
+    Route::get('/personnel/corrections/new', [ProfileCorrectionController::class, 'create'])->name('personnel.corrections.create');
+    Route::post('/personnel/corrections', [ProfileCorrectionController::class, 'store'])->name('personnel.corrections.store');
+    Route::get('/personnel/corrections/{id}', [ProfileCorrectionController::class, 'show'])->name('personnel.corrections.show');
+    Route::post('/personnel/corrections/{id}/withdraw', [ProfileCorrectionController::class, 'withdraw'])->name('personnel.corrections.withdraw');
+    Route::get('/personnel/corrections/{id}/files/{fileId}', [ProfileCorrectionController::class, 'file'])->name('personnel.corrections.file');
+    Route::get('/personnel/admin/profile-corrections', [ProfileCorrectionController::class, 'reviewIndex'])->name('personnel.corrections.review');
+    Route::post('/personnel/admin/profile-corrections/{id}/approve', [ProfileCorrectionController::class, 'approve'])->name('personnel.corrections.approve');
+    Route::post('/personnel/admin/profile-corrections/{id}/reject', [ProfileCorrectionController::class, 'reject'])->name('personnel.corrections.reject');
+    Route::post('/personnel/admin/profile-corrections/{id}/retry', [ProfileCorrectionController::class, 'retry'])->name('personnel.corrections.retry');
+    Route::get('/personnel/history', [PersonnelHistoryController::class, 'index'])->name('personnel.history');
+    Route::get('/personnel/history/certificate', [PersonnelHistoryController::class, 'certificate'])->name('personnel.history.certificate');
+    Route::get('/personnel/assessments', [AssessmentController::class, 'index'])->name('personnel.assessments');
+    Route::get('/personnel/assessments/review', [AssessmentController::class, 'reviewIndex'])->name('personnel.assessments.review');
+    Route::get('/personnel/assessments/{id}', [AssessmentController::class, 'show'])->name('personnel.assessments.show');
+    Route::get('/personnel/assessments/{id}/word', [AssessmentController::class, 'download'])->name('personnel.assessments.word');
+    Route::post('/personnel/assessments/{id}/summary', [AssessmentController::class, 'save'])->name('personnel.assessments.summary');
+    Route::post('/personnel/assessments/{id}/submit', [AssessmentController::class, 'submit'])->name('personnel.assessments.submit');
+    Route::post('/personnel/assessments/{id}/withdraw', [AssessmentController::class, 'withdraw'])->name('personnel.assessments.withdraw');
+    Route::post('/personnel/assessments/{id}/approve', [AssessmentController::class, 'approve'])->name('personnel.assessments.approve');
+    Route::post('/personnel/assessments/{id}/return', [AssessmentController::class, 'returnForChanges'])->name('personnel.assessments.return');
+    Route::get('/personnel/leave', [LeaveController::class, 'index'])->name('personnel.leave');
+    Route::get('/personnel/leave/details', [LeaveController::class, 'details'])->name('personnel.leave.details');
+    Route::get('/personnel/leave/cancellations', [LeaveController::class, 'cancellations'])->name('personnel.leave.cancellations');
+    Route::get('/personnel/leave/review', [LeaveController::class, 'review'])->name('personnel.leave.review');
+    Route::get('/personnel/leave/new', [LeaveController::class, 'create'])->name('personnel.leave.create');
+    Route::post('/personnel/leave', [LeaveController::class, 'save'])->name('personnel.leave.store');
+    Route::get('/personnel/leave/cancellations/new', [LeaveController::class, 'createCancellation'])->name('personnel.leave.cancellations.create');
+    Route::post('/personnel/leave/cancellations', [LeaveController::class, 'saveCancellation'])->name('personnel.leave.cancellations.store');
+    Route::get('/personnel/leave/attachments/{id}', [LeaveController::class, 'attachment'])->name('personnel.leave.attachment');
+    Route::get('/personnel/leave/{kind}/{id}/edit', [LeaveController::class, 'edit'])->name('personnel.leave.edit');
+    Route::post('/personnel/leave/{kind}/{id}/submit', [LeaveController::class, 'submit'])->name('personnel.leave.submit');
+    Route::post('/personnel/leave/{kind}/{id}/withdraw', [LeaveController::class, 'withdraw'])->name('personnel.leave.withdraw');
+    Route::post('/personnel/leave/{kind}/{id}/approve', [LeaveController::class, 'approve'])->name('personnel.leave.approve');
+    Route::post('/personnel/leave/{kind}/{id}/return', [LeaveController::class, 'returnForChanges'])->name('personnel.leave.return');
+    Route::post('/personnel/leave/a34/{id}', [LeaveController::class, 'save'])->name('personnel.leave.update');
+    Route::post('/personnel/leave/a38/{id}', [LeaveController::class, 'saveCancellation'])->name('personnel.leave.cancellations.update');
+    Route::get('/personnel/leave/{kind}/{id}', [LeaveController::class, 'show'])->name('personnel.leave.show');
+});

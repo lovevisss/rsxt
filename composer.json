@@ -19,6 +19,7 @@
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
         "lovevisss/laravel-zufedfc-cas": "^0.1",
+        "phpoffice/phpspreadsheet": "5.2",
         "phpoffice/phpword": "^1.4"
     },
     "require-dev": {

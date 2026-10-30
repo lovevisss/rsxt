@@ -136,6 +136,20 @@ return [
             'engine' => null,
         ],
 
+        'legacy_position_writer' => [
+            'driver' => 'mysql',
+            'host' => env('LEGACY_DB_HOST', '127.0.0.1'),
+            'port' => env('LEGACY_DB_PORT', 3306),
+            'database' => env('LEGACY_DB_DATABASE', 'uchr'),
+            'username' => env('LEGACY_POSITION_DB_USERNAME', ''),
+            'password' => env('LEGACY_POSITION_DB_PASSWORD', ''),
+            'charset' => env('LEGACY_DB_CHARSET', 'utf8'),
+            'collation' => env('LEGACY_DB_COLLATION', 'utf8_general_ci'),
+            'prefix' => '',
+            'strict' => false,
+            'engine' => null,
+        ],
+
         'migration_auxiliary' => [
             'driver' => 'mysql',
             'host' => env('COPY_TARGET_HOST', '10.1.12.183'),

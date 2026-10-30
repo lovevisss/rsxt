@@ -5,6 +5,7 @@ use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\PersonnelController;
 use App\Http\Controllers\PersonnelHistoryController;
 use App\Http\Controllers\PortalAuthController;
+use App\Http\Controllers\PositionAdminController;
 use App\Http\Controllers\ProfileCorrectionController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,17 @@ Route::match(['GET', 'POST'], '/auth/cas/slo', SloController::class)
 Route::post('/logout', [PortalAuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/personnel/admin/positions', [PositionAdminController::class, 'index'])->name('personnel.admin.positions');
+    Route::post('/personnel/admin/positions', [PositionAdminController::class, 'store'])->name('personnel.admin.positions.store');
+    Route::put('/personnel/admin/positions/{id}', [PositionAdminController::class, 'update'])->name('personnel.admin.positions.update');
+    Route::delete('/personnel/admin/positions/{id}', [PositionAdminController::class, 'destroy'])->name('personnel.admin.positions.destroy');
+    Route::get('/personnel/admin/positions/template', [PositionAdminController::class, 'template'])->name('personnel.admin.positions.template');
+    Route::get('/personnel/admin/positions/export', [PositionAdminController::class, 'export'])->name('personnel.admin.positions.export');
+    Route::post('/personnel/admin/positions/import/preview', [PositionAdminController::class, 'preview'])->name('personnel.admin.positions.import.preview');
+    Route::post('/personnel/admin/positions/import/commit', [PositionAdminController::class, 'commit'])->name('personnel.admin.positions.import.commit');
+    Route::get('/personnel/admin/administrators', [PositionAdminController::class, 'admins'])->name('personnel.admin.administrators');
+    Route::post('/personnel/admin/administrators', [PositionAdminController::class, 'addAdmin'])->name('personnel.admin.administrators.store');
+    Route::delete('/personnel/admin/administrators/{number}', [PositionAdminController::class, 'removeAdmin'])->name('personnel.admin.administrators.destroy');
     Route::get('/dashboard', [PersonnelController::class, 'dashboard'])->name('dashboard');
     Route::get('/personnel/profile', [PersonnelController::class, 'profile'])->name('personnel.profile');
     Route::get('/personnel/profile/portrait', [PersonnelController::class, 'portrait'])->name('personnel.profile.portrait');

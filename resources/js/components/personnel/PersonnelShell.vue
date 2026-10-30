@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { ArrowRight, BriefcaseBusiness, CalendarDays, ClipboardCheck, FilePenLine, History, LayoutDashboard, LogOut, ShieldCheck, UserRound } from '@lucide/vue';
+import { ArrowRight, BriefcaseBusiness, CalendarDays, ClipboardCheck, FilePenLine, History, LayoutDashboard, LogOut, ShieldCheck, UserRound, UsersRound } from '@lucide/vue';
 
 type Module = { menu_id: number; table: string; title: string };
 const props = defineProps<{ modules: Record<string, Module>; title: string; eyebrow: string; activeKey?: string }>();
@@ -20,6 +20,8 @@ const items = computed(() => [
     { key: 'leave_details', title: '我的请假明细', href: '/personnel/leave/details', icon: CalendarDays, visible: !!props.modules.leave_details },
     { key: 'leave_cancel', title: '销假申请', href: '/personnel/leave/cancellations', icon: CalendarDays, visible: !!props.modules.leave_cancel },
     { key: 'leave_review', title: '请假审批', href: '/personnel/leave/review', icon: ShieldCheck, visible: !!props.modules.leave_review },
+    { key: 'position_admin', title: '聘任岗位变动', href: '/personnel/admin/positions', icon: BriefcaseBusiness, visible: !!props.modules.position_admin },
+    { key: 'admin_accounts', title: '后台管理员', href: '/personnel/admin/administrators', icon: UsersRound, visible: !!props.modules.admin_accounts },
 ].filter((item) => item.visible));
 </script>
 

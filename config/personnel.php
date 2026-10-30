@@ -6,6 +6,8 @@ return [
     'local_preview' => env('PERSONNEL_LOCAL_PREVIEW', false),
     'preview_user_id' => env('PERSONNEL_PREVIEW_USER_ID'),
     'modules' => [
+        'position_admin' => ['menu_id' => 0, 'table' => 'h06', 'title' => '聘任岗位变动'],
+        'admin_accounts' => ['menu_id' => 0, 'table' => 'personnel_admins', 'title' => '后台管理员'],
         'profile' => ['menu_id' => 303, 'table' => 'h50', 'title' => '个人信息'],
         'corrections' => ['menu_id' => 333, 'all_menu_ids' => [303, 333], 'table' => 'h50', 'title' => '更正申请'],
         'correction_review' => ['role_id' => 15, 'table' => 'h50', 'title' => '更正审核'],

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\DepartmentWriter;
+use App\Services\GradeWriter;
 use App\Services\LegacyAccess;
 use App\Services\LegacyPortrait;
 use App\Services\LegacyProfileSections;
@@ -167,6 +169,17 @@ class PersonnelController extends Controller
     {
         if (! $this->access->canOpen($user, config('personnel.modules.profile.menu_id'))) {
             return null;
+        }
+
+        if (! app()->environment('testing') && config('positions.write_target') === 'production') {
+            $gradeWriter = app(GradeWriter::class);
+            if ($gradeWriter->available()) {
+                $gradeWriter->refreshEmployee((string) $user->username);
+            }
+            $departmentWriter = app(DepartmentWriter::class);
+            if ($departmentWriter->available()) {
+                $departmentWriter->refreshEmployee((string) $user->username);
+            }
         }
 
         return DB::connection('legacy')->table('h50')

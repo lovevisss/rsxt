@@ -1,0 +1,72 @@
+.department-lead {
+    background: linear-gradient(110deg, #e3ede5, #e9eee4 65%, #dcece7);
+}
+.department-lead-count {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #397660;
+    min-width: 100px;
+}
+.department-lead-count strong {
+    font-size: 38px;
+    line-height: 1;
+}
+.department-lead-count span {
+    font-size: 10px;
+    margin-top: 8px;
+    color: #749484;
+}
+.department-action-note {
+    font-size: 11px;
+    color: #739184;
+    letter-spacing: 0.04em;
+}
+.department-table {
+    min-width: 970px !important;
+}
+.department-table td:first-child strong,
+.department-table td:first-child small {
+    display: block;
+}
+.department-table td:first-child small {
+    font-size: 10px;
+    color: #90a69a;
+    margin-top: 4px;
+}
+.department-target {
+    display: inline-block;
+    background: #e4f1e8;
+    color: #2b7153;
+    border-radius: 7px;
+    padding: 6px 9px;
+    font-weight: 600;
+}
+.department-drawer {
+    width: min(100%, 500px);
+}
+.department-drawer form {
+    display: block;
+}
+.department-drawer form > label {
+    display: block;
+    margin-bottom: 16px;
+}
+.department-drawer form > label input,
+.department-drawer form > label select,
+.department-drawer form > label textarea {
+    margin-top: 7px;
+}
+.department-drawer .position-save {
+    width: 100%;
+}
+.department-person {
+    color: #327b54;
+    font-size: 11px;
+    margin: -8px 0 16px;
+}
+.department-lookup-error {
+    color: #b34f43;
+    font-size: 11px;
+    margin: -8px 0 16px;
+}

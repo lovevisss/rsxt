@@ -47,8 +47,17 @@ class ProvisionPositionWriter extends Command
         $identity = $admin->quote($account['username'])."@'%'";
         $admin->exec('CREATE USER IF NOT EXISTS '.$identity.' IDENTIFIED BY '.$admin->quote($account['password']));
         $admin->exec('GRANT SELECT,INSERT,UPDATE ON `uchr`.`h06` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT,UPDATE ON `uchr`.`h17` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT,UPDATE ON `uchr`.`h54` TO '.$identity);
         $admin->exec('GRANT SELECT ON `uchr`.`h50` TO '.$identity);
         $admin->exec('GRANT UPDATE (`h5019`,`h5021`,`h5094`,`h5073`,`updateTime`) ON `uchr`.`h50` TO '.$identity);
+        $admin->exec('GRANT UPDATE (`h5071`,`h5072`,`updateTime`) ON `uchr`.`h50` TO '.$identity);
+        $admin->exec('GRANT UPDATE (`h5003`,`updateTime`) ON `uchr`.`h50` TO '.$identity);
+        $admin->exec('GRANT SELECT ON `uchr`.`department` TO '.$identity);
+        $admin->exec('GRANT SELECT ON `uchr`.`user` TO '.$identity);
+        $admin->exec('GRANT UPDATE (`departmentId`,`updatetime`) ON `uchr`.`user` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT ON `rsxt`.`department_profile_baselines` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT ON `rsxt`.`department_change_events` TO '.$identity);
         $copy->connect([...$target, ...$account, 'database' => 'uchr']);
         $settings = [
             'LEGACY_POSITION_DB_USERNAME' => $account['username'],

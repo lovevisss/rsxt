@@ -1,0 +1,137 @@
+.grade-lead {
+    background: linear-gradient(115deg, #e5eee5 0%, #dce9e3 72%, #d7e4dc 100%);
+}
+.grade-lead-mark {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #2a6d58;
+    min-width: 105px;
+}
+.grade-lead-mark strong {
+    font-size: 34px;
+    line-height: 1;
+    margin-top: 9px;
+}
+.grade-lead-mark span {
+    font-size: 10px;
+    color: #6c8978;
+    margin-top: 4px;
+}
+.grade-view-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #486d58;
+}
+.grade-view-label span {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 7px;
+    background: #e8f0e7;
+}
+.grade-view-label span:nth-child(2) {
+    background: #e7eef4;
+    color: #4e7184;
+}
+.grade-view-label small {
+    font-size: 10px;
+    color: #91a499;
+    margin-left: 4px;
+}
+.grade-table {
+    min-width: 1340px !important;
+}
+.grade-table td {
+    white-space: nowrap;
+}
+.grade-table td:first-child {
+    min-width: 130px;
+}
+.grade-sequence {
+    font-size: 9px !important;
+    letter-spacing: 0.12em;
+    color: #93a69b !important;
+    margin: 0 0 5px !important;
+}
+.grade-badge {
+    display: inline-block;
+    padding: 6px 9px;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.grade-badge.bb {
+    background: #e5f1e7;
+    color: #2d7550;
+}
+.grade-badge.df {
+    background: #e8f0f7;
+    color: #386f8b;
+}
+.grade-blank {
+    color: #a7b7aa;
+}
+.grade-drawer {
+    width: min(100%, 560px);
+}
+.grade-drawer form {
+    display: block;
+}
+.grade-drawer .grade-full {
+    margin: 0 0 19px;
+}
+.grade-form-group {
+    border: 1px solid #dfe9de;
+    border-radius: 12px;
+    background: #fff;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+.grade-form-group-head {
+    display: flex;
+    justify-content: space-between;
+    padding: 13px 17px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #287250;
+    background: #eaf4ea;
+}
+.grade-form-group-head.df {
+    color: #386f8b;
+    background: #ebf3f8;
+}
+.grade-form-group-head small {
+    font-size: 10px;
+    font-weight: 500;
+}
+.grade-form-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 13px;
+    padding: 16px;
+}
+.grade-form-fields label:first-child {
+    grid-column: 1/-1;
+}
+.grade-drawer .position-errors {
+    margin-bottom: 15px;
+}
+.grade-drawer .position-save {
+    width: 100%;
+}
+@media (max-width: 600px) {
+    .grade-view-label small {
+        display: none;
+    }
+    .grade-lead-mark {
+        min-width: 75px;
+    }
+    .grade-form-fields {
+        grid-template-columns: 1fr;
+    }
+    .grade-form-fields label:first-child {
+        grid-column: auto;
+    }
+}

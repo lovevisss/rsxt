@@ -3,6 +3,8 @@
 @import './history.css';
 @import './corrections.css';
 @import './positions.css';
+@import './grades.css';
+@import './departments.css';
 
 .personnel-app{--ink:#183333;--forest:#174845;--mint:#e7f1eb;--paper:#f6f7f2;--line:#dce4dc;min-height:100vh;display:flex;background:var(--paper);color:var(--ink);font-family:'DM Sans','Noto Sans SC',sans-serif}
 .personnel-sidebar{width:258px;min-width:258px;min-height:100vh;background:#143d3b;color:#eaf1e8;display:flex;flex-direction:column;padding:31px 19px 22px;position:sticky;top:0;height:100vh}

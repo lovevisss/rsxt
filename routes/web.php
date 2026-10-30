@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\DepartmentAdminController;
+use App\Http\Controllers\GradeAdminController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\PersonnelController;
 use App\Http\Controllers\PersonnelHistoryController;
@@ -20,6 +22,23 @@ Route::match(['GET', 'POST'], '/auth/cas/slo', SloController::class)
 Route::post('/logout', [PortalAuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/personnel/admin/departments', [DepartmentAdminController::class, 'index'])->name('personnel.admin.departments');
+    Route::get('/personnel/admin/departments/person', [DepartmentAdminController::class, 'lookup'])->name('personnel.admin.departments.lookup');
+    Route::post('/personnel/admin/departments', [DepartmentAdminController::class, 'store'])->name('personnel.admin.departments.store');
+    Route::put('/personnel/admin/departments/{id}', [DepartmentAdminController::class, 'update'])->name('personnel.admin.departments.update');
+    Route::delete('/personnel/admin/departments/{id}', [DepartmentAdminController::class, 'destroy'])->name('personnel.admin.departments.destroy');
+    Route::get('/personnel/admin/departments/template', [DepartmentAdminController::class, 'template'])->name('personnel.admin.departments.template');
+    Route::get('/personnel/admin/departments/export', [DepartmentAdminController::class, 'export'])->name('personnel.admin.departments.export');
+    Route::post('/personnel/admin/departments/import/preview', [DepartmentAdminController::class, 'preview'])->name('personnel.admin.departments.import.preview');
+    Route::post('/personnel/admin/departments/import/commit', [DepartmentAdminController::class, 'commit'])->name('personnel.admin.departments.import.commit');
+    Route::get('/personnel/admin/grades', [GradeAdminController::class, 'index'])->name('personnel.admin.grades');
+    Route::post('/personnel/admin/grades', [GradeAdminController::class, 'store'])->name('personnel.admin.grades.store');
+    Route::put('/personnel/admin/grades/{id}', [GradeAdminController::class, 'update'])->name('personnel.admin.grades.update');
+    Route::delete('/personnel/admin/grades/{id}', [GradeAdminController::class, 'destroy'])->name('personnel.admin.grades.destroy');
+    Route::get('/personnel/admin/grades/template', [GradeAdminController::class, 'template'])->name('personnel.admin.grades.template');
+    Route::get('/personnel/admin/grades/export', [GradeAdminController::class, 'export'])->name('personnel.admin.grades.export');
+    Route::post('/personnel/admin/grades/import/preview', [GradeAdminController::class, 'preview'])->name('personnel.admin.grades.import.preview');
+    Route::post('/personnel/admin/grades/import/commit', [GradeAdminController::class, 'commit'])->name('personnel.admin.grades.import.commit');
     Route::get('/personnel/admin/positions', [PositionAdminController::class, 'index'])->name('personnel.admin.positions');
     Route::post('/personnel/admin/positions', [PositionAdminController::class, 'store'])->name('personnel.admin.positions.store');
     Route::put('/personnel/admin/positions/{id}', [PositionAdminController::class, 'update'])->name('personnel.admin.positions.update');

@@ -47,6 +47,7 @@ const department = ref(props.filters.department || '');
 const search = ref(props.filters.search || '');
 const activeRecord = ref<RecordItem | null>(null);
 const showForm = ref(false);
+const showImport = ref(false);
 const upload = useForm<{ file: File | null }>({ file: null });
 const form = useForm({
     type: 'DF',
@@ -167,6 +168,16 @@ const departmentName = (code: string) =>
                 ><button
                     v-if="writerAvailable"
                     type="button"
+                    @click="
+                        upload.reset();
+                        upload.clearErrors();
+                        showImport = true;
+                    "
+                >
+                    <ArrowUpFromLine :size="16" />批量导入</button
+                ><button
+                    v-if="writerAvailable"
+                    type="button"
                     class="position-primary"
                     @click="openCreate"
                 >
@@ -268,36 +279,66 @@ const departmentName = (code: string) =>
                 />
             </div>
         </section>
-        <section class="position-import">
-            <div>
-                <span class="position-section-tag">BULK IMPORT</span>
-                <h3>批量导入</h3>
+        <div
+            v-if="showImport"
+            class="position-overlay"
+            @click.self="showImport = false"
+        >
+            <section
+                class="position-drawer position-import-drawer"
+                role="dialog"
+                aria-modal="true"
+                aria-label="批量导入岗位变动"
+            >
+                <div class="position-drawer-head">
+                    <div>
+                        <span class="position-section-tag">BULK IMPORT</span>
+                        <h2>批量导入岗位变动</h2>
+                    </div>
+                    <button
+                        type="button"
+                        aria-label="关闭"
+                        @click="showImport = false"
+                    >
+                        <X :size="19" />
+                    </button>
+                </div>
                 <p>
-                    按模板填写后上传。系统先逐行校验，确认后才会写入岗位变动和人员档案。
+                    下载模板填写东方或本部的岗位变动。上传后先逐行预览，确认后再写入；每次最多
+                    500 条、10 MB。
                 </p>
-            </div>
-            <form v-if="writerAvailable" @submit.prevent="preview">
-                <input
-                    type="file"
-                    accept=".xlsx"
-                    @change="
-                        upload.file =
-                            ($event.target as HTMLInputElement).files?.[0] ||
-                            null
-                    "
-                /><button
-                    :disabled="upload.processing || !upload.file"
-                    type="submit"
+                <a
+                    class="position-import-template"
+                    href="/personnel/admin/positions/template"
+                    ><FileSpreadsheet :size="17" />下载含填写示例的模板</a
                 >
-                    <ArrowUpFromLine :size="16" />预览导入</button
-                ><small v-if="upload.errors.file">{{
-                    upload.errors.file
-                }}</small>
-            </form>
-            <p v-else class="position-disabled">
-                岗位写入账号尚未配置，当前仅可查询与导出。
-            </p>
-        </section>
+                <form @submit.prevent="preview">
+                    <label for="position-import-file">选择 Excel 文件</label>
+                    <input
+                        id="position-import-file"
+                        type="file"
+                        accept=".xlsx"
+                        required
+                        @change="
+                            upload.file =
+                                ($event.target as HTMLInputElement)
+                                    .files?.[0] || null
+                        "
+                    />
+                    <small
+                        v-if="upload.errors.file"
+                        class="position-import-error"
+                        >{{ upload.errors.file }}</small
+                    >
+                    <button
+                        :disabled="upload.processing || !upload.file"
+                        type="submit"
+                    >
+                        <ArrowUpFromLine :size="16" />预览导入
+                    </button>
+                </form>
+            </section>
+        </div>
         <div
             v-if="showForm"
             class="position-overlay"

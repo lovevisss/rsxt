@@ -162,15 +162,23 @@ test('import validates entire workbook, skips duplicates and commits only valid 
     $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5019' => '19', 'h5094' => '19'], 'legacy_stage_writer');
 });
 
-test('template downloads as a two-sheet workbook with the agreed columns', function () {
+test('template keeps the import sheet blank and shows DF and BB examples separately', function () {
     $response = $this->actingAs(User::findOrFail(1))->get('/personnel/admin/positions/template');
     $response->assertOk()->assertDownload('position-import-template.xlsx');
     $path = tempnam(sys_get_temp_dir(), 'position-template-');
     file_put_contents($path, $response->streamedContent());
     $book = IOFactory::load($path);
-    expect($book->getSheetCount())->toBe(2)
+    expect($book->getSheetCount())->toBe(3)
         ->and($book->getSheet(0)->rangeToArray('A1:H1')[0])->toBe(PositionSpreadsheet::HEADERS)
-        ->and((string) $book->getSheet(1)->getCell('A2')->getValue())->toBe('14');
+        ->and(array_filter($book->getSheet(0)->rangeToArray('A2:H2')[0]))->toBe([])
+        ->and($book->getSheet(1)->getTitle())->toBe('填写示例')
+        ->and((string) $book->getSheet(1)->getCell('A2')->getValue())->toBe('DF')
+        ->and((string) $book->getSheet(1)->getCell('A3')->getValue())->toBe('BB')
+        ->and((string) $book->getSheet(1)->getCell('B2')->getValue())->toContain('请替换')
+        ->and((string) $book->getSheet(1)->getCell('C2')->getValue())->toBe('14')
+        ->and((string) $book->getSheet(2)->getCell('A2')->getValue())->toBe('14');
     $book->disconnectWorksheets();
+    expect(app(PositionSpreadsheet::class)->parse(new UploadedFile($path, 'template.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true)))->toBe([]);
     unlink($path);
 });

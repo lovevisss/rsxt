@@ -245,6 +245,71 @@
     border-radius: 14px;
     background: #f2f7ef;
 }
+.position-import-drawer > p {
+    font-size: 12px;
+    line-height: 1.8;
+    color: #6a8274;
+    margin: 0 0 22px;
+}
+.position-import-template {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 15px 17px;
+    border: 1px solid #d7e5d9;
+    border-radius: 10px;
+    background: #f1f7f0;
+    color: #285c48;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 24px;
+}
+.position-import-template:hover {
+    background: #e8f2e7;
+}
+.position-import-drawer form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+}
+.position-import-drawer form label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #496b59;
+}
+.position-import-drawer form input {
+    height: auto;
+    border: 1px dashed #abc8b0;
+    border-radius: 9px;
+    padding: 15px;
+    max-width: none;
+    background: #fff;
+}
+.position-import-drawer form button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 9px;
+    background: #174845;
+    color: #fff;
+    height: 43px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+}
+.position-import-drawer form button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.position-import-error {
+    color: #b94d3a;
+    font-size: 11px;
+}
 .position-import h3 {
     margin: 7px 0;
     font-size: 18px;

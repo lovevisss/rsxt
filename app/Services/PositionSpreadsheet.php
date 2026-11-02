@@ -65,6 +65,22 @@ class PositionSpreadsheet
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
         if ($template) {
+            $example = $book->createSheet();
+            $example->setTitle('填写示例');
+            $example->fromArray(self::HEADERS, null, 'A1');
+            $oldCode = (string) ($positions[0]['code'] ?? '');
+            $newCode = (string) ($positions[1]['code'] ?? $oldCode);
+            $example->fromArray(['DF', '示例工号（请替换）', $oldCode, '2024-01-01', $newCode,
+                '2024-07-01', '岗位调整', '东方示例'], null, 'A2');
+            $example->fromArray(['BB', '示例工号（请替换）', $oldCode, '2024-01-01', $newCode,
+                '2024-07-01', '岗位调整', '本部示例'], null, 'A3');
+            $example->setCellValue('A5', '仅供参考：请在“导入模板”页填写真实职工编号；此示例页不会导入。');
+            $example->getStyle('A1:H1')->getFont()->setBold(true);
+            $example->getStyle('A2:H3')->getFill()->setFillType('solid')->getStartColor()->setRGB('EAF2E8');
+            $example->getStyle('B2:B3')->getNumberFormat()->setFormatCode('@');
+            foreach (range('A', 'H') as $column) {
+                $example->getColumnDimension($column)->setAutoSize(true);
+            }
             $reference = $book->createSheet();
             $reference->setTitle('岗位代码');
             $reference->fromArray(['代码', '岗位名称'], null, 'A1');

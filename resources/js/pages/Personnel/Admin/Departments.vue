@@ -135,6 +135,7 @@ function remove(item: DepartmentRecord) {
 <template>
     <Head title="人员部门变动" />
     <PersonnelShell
+        workspace="admin"
         :modules="modules"
         title="人员部门变动"
         eyebrow="PERSONNEL / 部门履历"

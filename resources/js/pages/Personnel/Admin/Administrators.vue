@@ -21,6 +21,7 @@ function remove(number: string) {
 <template>
     <Head title="后台管理员" />
     <PersonnelShell
+        workspace="admin"
         :modules="modules"
         title="后台管理员"
         eyebrow="ADMINISTRATION / 权限配置"

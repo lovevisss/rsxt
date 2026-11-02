@@ -22,6 +22,7 @@ Route::match(['GET', 'POST'], '/auth/cas/slo', SloController::class)
 Route::post('/logout', [PortalAuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/personnel/admin', [PositionAdminController::class, 'home'])->name('personnel.admin.home');
     Route::get('/personnel/admin/departments', [DepartmentAdminController::class, 'index'])->name('personnel.admin.departments');
     Route::get('/personnel/admin/departments/person', [DepartmentAdminController::class, 'lookup'])->name('personnel.admin.departments.lookup');
     Route::post('/personnel/admin/departments', [DepartmentAdminController::class, 'store'])->name('personnel.admin.departments.store');

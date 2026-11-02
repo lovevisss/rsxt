@@ -22,6 +22,15 @@ class PositionAdminController extends Controller
     public function __construct(private PositionAccess $access, private PositionWriter $writer,
         private PositionSpreadsheet $excel, private LegacyAccess $legacy) {}
 
+    public function home(Request $request): Response
+    {
+        $this->access->requireAdmin($request->user());
+
+        return Inertia::render('Personnel/Admin/Home', [
+            'modules' => $this->legacy->availableModules($request->user()),
+        ]);
+    }
+
     public function index(Request $request): Response
     {
         $this->access->requireAdmin($request->user());

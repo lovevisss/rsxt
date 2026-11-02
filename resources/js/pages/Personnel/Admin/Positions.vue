@@ -127,6 +127,7 @@ const departmentName = (code: string) =>
 <template>
     <Head title="聘任岗位变动" />
     <PersonnelShell
+        workspace="admin"
         :modules="modules"
         title="聘任岗位变动"
         eyebrow="PERSONNEL / 岗位履历"

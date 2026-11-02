@@ -119,6 +119,7 @@ function preview() {
 <template>
     <Head title="所聘岗位等级" />
     <PersonnelShell
+        workspace="admin"
         :modules="modules"
         title="所聘岗位等级"
         eyebrow="PERSONNEL / 等级履历"

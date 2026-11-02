@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -93,9 +94,14 @@ function positionPayload(array $changes = []): array
 }
 
 test('only configured admins may manage positions and last admin cannot be removed', function () {
+    $this->actingAs(User::findOrFail(2))->get('/personnel/admin')->assertForbidden();
     $this->actingAs(User::findOrFail(2))->get('/personnel/admin/positions')->assertForbidden();
     $this->actingAs(User::findOrFail(2))->post('/personnel/admin/positions', positionPayload())->assertForbidden();
     DB::table('personnel_admins')->where('employee_number', '20201003')->delete();
+    $this->actingAs(User::findOrFail(1))->get('/personnel/admin')->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Personnel/Admin/Home')->has('modules.position_admin')->has('modules.grade_admin')
+            ->has('modules.department_admin')->has('modules.admin_accounts'));
     $this->actingAs(User::findOrFail(1))->get('/personnel/admin/positions')->assertOk();
     $this->actingAs(User::findOrFail(1))->delete('/personnel/admin/administrators/20150301')->assertStatus(422);
     $this->actingAs(User::findOrFail(1))->post('/personnel/admin/administrators', ['employee_number' => 'E002'])->assertRedirect();

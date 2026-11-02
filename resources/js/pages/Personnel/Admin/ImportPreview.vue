@@ -27,6 +27,7 @@ const duplicate = props.rows.filter((row) => row.status === 'duplicate').length;
 <template>
     <Head title="导入预览" />
     <PersonnelShell
+        workspace="admin"
         :modules="modules"
         title="导入预览"
         eyebrow="BULK IMPORT / 逐行校验"

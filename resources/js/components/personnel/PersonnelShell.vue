@@ -15,6 +15,7 @@ import {
     UsersRound,
     Layers3,
     Building2,
+    ArrowLeftRight,
 } from '@lucide/vue';
 
 type Module = { menu_id: number; table: string; title: string };
@@ -23,6 +24,7 @@ const props = defineProps<{
     title: string;
     eyebrow: string;
     activeKey?: string;
+    workspace?: 'employee' | 'admin';
 }>();
 const page = usePage();
 const userName = computed(
@@ -31,130 +33,156 @@ const userName = computed(
             ?.name ?? '',
 );
 const currentPath = computed(() => page.url.split('?')[0]);
+const isAdminWorkspace = computed(() => props.workspace === 'admin');
+const canSwitchToAdmin = computed(() => !!props.modules.admin_accounts);
 const items = computed(() =>
     [
+        {
+            key: 'admin_home',
+            title: '管理工作台',
+            href: '/personnel/admin',
+            icon: LayoutDashboard,
+            visible: isAdminWorkspace.value,
+        },
         {
             key: 'dashboard',
             title: '工作台',
             href: '/dashboard',
             icon: LayoutDashboard,
-            visible: true,
+            visible: !isAdminWorkspace.value,
         },
         {
             key: 'profile',
             title: '个人档案',
             href: '/personnel/profile',
             icon: UserRound,
-            visible: !!props.modules.profile,
+            visible: !isAdminWorkspace.value && !!props.modules.profile,
         },
         {
             key: 'corrections',
             title: '更正申请',
             href: '/personnel/corrections',
             icon: FilePenLine,
-            visible: !!props.modules.corrections,
+            visible: !isAdminWorkspace.value && !!props.modules.corrections,
         },
         {
             key: 'correction_review',
             title: '更正审核',
             href: '/personnel/admin/profile-corrections',
             icon: ShieldCheck,
-            visible: !!props.modules.correction_review,
+            visible:
+                !isAdminWorkspace.value && !!props.modules.correction_review,
         },
         {
             key: 'history',
             title: '档案履历',
             href: '/personnel/history',
             icon: History,
-            visible: !!props.modules.history,
+            visible: !isAdminWorkspace.value && !!props.modules.history,
         },
         {
             key: 'assessments',
             title: '年度考核',
             href: '/personnel/assessments',
             icon: ClipboardCheck,
-            visible: !!props.modules.assessments,
+            visible: !isAdminWorkspace.value && !!props.modules.assessments,
         },
         {
             key: 'assessment_review',
             title: '部门考核审核',
             href: '/personnel/assessments/review',
             icon: ShieldCheck,
-            visible: !!props.modules.assessment_review,
+            visible:
+                !isAdminWorkspace.value && !!props.modules.assessment_review,
         },
         {
             key: 'leave',
             title: '请假申请与进度',
             href: '/personnel/leave',
             icon: CalendarDays,
-            visible: !!props.modules.leave || !!props.modules.leave_progress,
+            visible:
+                !isAdminWorkspace.value &&
+                (!!props.modules.leave || !!props.modules.leave_progress),
         },
         {
             key: 'leave_details',
             title: '我的请假明细',
             href: '/personnel/leave/details',
             icon: CalendarDays,
-            visible: !!props.modules.leave_details,
+            visible: !isAdminWorkspace.value && !!props.modules.leave_details,
         },
         {
             key: 'leave_cancel',
             title: '销假申请',
             href: '/personnel/leave/cancellations',
             icon: CalendarDays,
-            visible: !!props.modules.leave_cancel,
+            visible: !isAdminWorkspace.value && !!props.modules.leave_cancel,
         },
         {
             key: 'leave_review',
             title: '请假审批',
             href: '/personnel/leave/review',
             icon: ShieldCheck,
-            visible: !!props.modules.leave_review,
+            visible: !isAdminWorkspace.value && !!props.modules.leave_review,
         },
         {
             key: 'position_admin',
             title: '聘任岗位变动',
             href: '/personnel/admin/positions',
             icon: BriefcaseBusiness,
-            visible: !!props.modules.position_admin,
+            visible: isAdminWorkspace.value && !!props.modules.position_admin,
         },
         {
             key: 'grade_admin',
             title: '所聘岗位等级',
             href: '/personnel/admin/grades',
             icon: Layers3,
-            visible: !!props.modules.grade_admin,
+            visible: isAdminWorkspace.value && !!props.modules.grade_admin,
         },
         {
             key: 'department_admin',
             title: '人员部门变动',
             href: '/personnel/admin/departments',
             icon: Building2,
-            visible: !!props.modules.department_admin,
+            visible: isAdminWorkspace.value && !!props.modules.department_admin,
         },
         {
             key: 'admin_accounts',
             title: '后台管理员',
             href: '/personnel/admin/administrators',
             icon: UsersRound,
-            visible: !!props.modules.admin_accounts,
+            visible: isAdminWorkspace.value && !!props.modules.admin_accounts,
         },
     ].filter((item) => item.visible),
 );
 </script>
 
 <template>
-    <div class="personnel-app">
+    <div
+        :class="[
+            'personnel-app',
+            { 'personnel-admin-workspace': isAdminWorkspace },
+        ]"
+    >
         <aside class="personnel-sidebar">
             <div class="personnel-brand">
                 <div class="personnel-brand-mark">
                     <BriefcaseBusiness :size="23" :stroke-width="1.8" />
                 </div>
                 <div>
-                    <span class="personnel-brand-en">PERSONNEL / 01</span
-                    ><strong>人事管理平台</strong>
+                    <span class="personnel-brand-en">{{
+                        isAdminWorkspace
+                            ? 'PERSONNEL / ADMIN'
+                            : 'PERSONNEL / STAFF'
+                    }}</span
+                    ><strong>{{
+                        isAdminWorkspace ? '人事管理后台' : '人事管理平台'
+                    }}</strong>
                 </div>
             </div>
-            <p class="personnel-side-label">工作空间</p>
+            <p class="personnel-side-label">
+                {{ isAdminWorkspace ? '后台工作空间' : '员工工作空间' }}
+            </p>
             <nav class="personnel-nav" aria-label="主导航">
                 <Link
                     v-for="item in items"
@@ -182,6 +210,15 @@ const items = computed(() =>
                     />
                 </Link>
             </nav>
+            <Link
+                v-if="isAdminWorkspace || canSwitchToAdmin"
+                class="personnel-workspace-switch"
+                :href="isAdminWorkspace ? '/dashboard' : '/personnel/admin'"
+                ><ArrowLeftRight :size="17" /><span>{{
+                    isAdminWorkspace ? '返回员工工作台' : '进入管理后台'
+                }}</span
+                ><ArrowRight :size="15"
+            /></Link>
             <div class="personnel-side-foot">
                 <span class="personnel-live-dot"></span> 与原人事档案同步
                 <small>业务数据来自现有数据库</small>
@@ -190,11 +227,22 @@ const items = computed(() =>
 
         <div class="personnel-main">
             <header class="personnel-topbar">
-                <div class="personnel-mobile-brand">人事管理平台</div>
+                <div class="personnel-mobile-brand">
+                    {{ isAdminWorkspace ? '人事管理后台' : '人事管理平台' }}
+                </div>
                 <div class="personnel-breadcrumb">
-                    人事管理 <span>/</span> {{ title }}
+                    {{ isAdminWorkspace ? '管理后台' : '员工工作台' }}
+                    <span>/</span> {{ title }}
                 </div>
                 <div class="personnel-user">
+                    <Link
+                        v-if="isAdminWorkspace || canSwitchToAdmin"
+                        class="personnel-topbar-switch"
+                        :href="
+                            isAdminWorkspace ? '/dashboard' : '/personnel/admin'
+                        "
+                        >{{ isAdminWorkspace ? '返回前台' : '管理后台' }}</Link
+                    >
                     <span class="personnel-avatar">{{
                         userName.slice(0, 1)
                     }}</span>

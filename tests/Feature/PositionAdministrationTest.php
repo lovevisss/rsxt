@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Services\PositionSpreadsheet;
 use App\Services\PositionWriter;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\UploadedFile;
@@ -122,7 +123,7 @@ test('position changes sync latest profile and deletion restores baseline withou
     $this->actingAs($actor)->delete('/personnel/admin/positions/'.$row->Id, ['version' => $version])->assertRedirect();
     $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5019' => 'old', 'h5021' => '2020-01-01', 'h5094' => 'bb-old'], 'legacy_stage_writer');
     $this->assertDatabaseHas('h06', ['Id' => $row->Id, 'yndelete' => '1'], 'legacy_stage_writer');
-    expect(DB::table('position_change_events')->where('record_id', $row->Id)->count())->toBe(2);
+    expect(DB::table('admin_operations')->where('module', 'position')->count())->toBe(2);
 });
 
 function positionWorkbook(array $rows): UploadedFile
@@ -181,4 +182,100 @@ test('template keeps the import sheet blank and shows DF and BB examples separat
     expect(app(PositionSpreadsheet::class)->parse(new UploadedFile($path, 'template.xlsx',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true)))->toBe([]);
     unlink($path);
+});
+
+test('operation log restricts access and rolls back a whole import with conflict protection', function () {
+    $actor = User::findOrFail(1);
+    $this->actingAs(User::findOrFail(2))->get('/personnel/admin/operations')->assertForbidden();
+    $this->actingAs(User::findOrFail(2))->post('/personnel/admin/operations/1/rollback')->assertForbidden();
+    $file = positionWorkbook([
+        ['DF', 'E002', '14', '2023-01-01', '19', '2024-01-01', '调整', ''],
+        ['BB', 'E002', '14', '2023-01-01', '19', '2024-03-01', '调整', ''],
+    ]);
+    $this->actingAs($actor)->post('/personnel/admin/positions/import/preview', ['file' => $file])->assertOk();
+    $this->actingAs($actor)->post('/personnel/admin/positions/import/commit',
+        ['token' => session('position_import_token')])->assertRedirect();
+    $operation = DB::table('admin_operations')->where('module', 'position')->first();
+    expect($operation->action)->toBe('imported')->and($operation->item_count)->toBe(2);
+    $this->actingAs($actor)->get('/personnel/admin/operations')->assertOk();
+    $this->actingAs($actor)->get('/personnel/admin/operations/'.$operation->id)->assertOk();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5019' => 'old', 'h5094' => 'bb-old'], 'legacy_stage_writer');
+    expect(DB::connection('legacy_stage_writer')->table('h06')->where('yndelete', '0')->count())->toBe(0);
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertStatus(409);
+});
+
+test('later edit blocks rollback of an older action', function () {
+    $actor = User::findOrFail(1);
+    $this->actingAs($actor)->post('/personnel/admin/positions', positionPayload())->assertRedirect();
+    $first = DB::table('admin_operations')->first();
+    $row = DB::connection('legacy_stage_writer')->table('h06')->first();
+    $this->actingAs($actor)->put('/personnel/admin/positions/'.$row->Id,
+        [...positionPayload(['new_position' => '14']), 'version' => app(PositionWriter::class)->version($row)])->assertRedirect();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$first->id.'/rollback')->assertStatus(409);
+    $this->assertDatabaseHas('h06', ['Id' => $row->Id, 'h0604' => '14', 'yndelete' => '0'], 'legacy_stage_writer');
+});
+
+test('administrator changes are logged and last administrator cannot be rolled away', function () {
+    $actor = User::findOrFail(1);
+    $this->actingAs($actor)->post('/personnel/admin/administrators', ['employee_number' => 'E002'])->assertRedirect();
+    $operation = DB::table('admin_operations')->where('module', 'administrators')->first();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseMissing('personnel_admins', ['employee_number' => 'E002']);
+    DB::table('personnel_admins')->where('employee_number', '20201003')->delete();
+    $this->actingAs($actor)->post('/personnel/admin/administrators', ['employee_number' => 'E002'])->assertRedirect();
+    $latest = DB::table('admin_operations')->where('module', 'administrators')->where('action', 'admin_added')
+        ->orderByDesc('id')->first();
+    DB::table('personnel_admins')->where('employee_number', '20150301')->delete();
+    $this->actingAs(User::findOrFail(2))->post('/personnel/admin/operations/'.$latest->id.'/rollback')->assertStatus(409);
+    $this->assertDatabaseHas('personnel_admins', ['employee_number' => 'E002']);
+});
+
+test('one changed row blocks rollback of an entire import', function () {
+    $actor = User::findOrFail(1);
+    $file = positionWorkbook([
+        ['DF', 'E002', '14', '2023-01-01', '19', '2024-01-01', '调整', ''],
+        ['BB', 'E002', '14', '2023-01-01', '19', '2024-03-01', '调整', ''],
+    ]);
+    $this->actingAs($actor)->post('/personnel/admin/positions/import/preview', ['file' => $file])->assertOk();
+    $this->actingAs($actor)->post('/personnel/admin/positions/import/commit',
+        ['token' => session('position_import_token')])->assertRedirect();
+    $import = DB::table('admin_operations')->where('action', 'imported')->first();
+    $row = DB::connection('legacy_stage_writer')->table('h06')->where('h0615', 'DF')->first();
+    $this->actingAs($actor)->put('/personnel/admin/positions/'.$row->Id,
+        [...positionPayload(['new_position' => '14']), 'version' => app(PositionWriter::class)->version($row)])->assertRedirect();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$import->id.'/rollback')->assertStatus(409);
+    expect(DB::connection('legacy_stage_writer')->table('h06')->where('yndelete', '0')->count())->toBe(2);
+    $this->assertDatabaseHas('admin_operations', ['id' => $import->id, 'status' => 'active']);
+});
+
+test('removing an administrator can be rolled back', function () {
+    $actor = User::findOrFail(1);
+    $this->actingAs($actor)->delete('/personnel/admin/administrators/20201003')->assertRedirect();
+    $operation = DB::table('admin_operations')->where('action', 'admin_removed')->first();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseHas('personnel_admins', ['employee_number' => '20201003']);
+});
+
+test('legacy operation details remain readable but cannot be rolled back', function () {
+    $id = DB::table('admin_operations')->insertGetId([
+        'module' => 'position', 'action' => 'updated', 'actor_user_id' => 1,
+        'employee_number' => 'E002', 'items' => json_encode([['record_id' => 7, 'details' => 'old log']]),
+        'item_count' => 1, 'status' => 'legacy', 'created_at' => now(),
+    ]);
+    $actor = User::findOrFail(1);
+    $this->actingAs($actor)->get('/personnel/admin/operations/'.$id)->assertOk();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$id.'/rollback')->assertStatus(409);
+    $this->assertDatabaseHas('admin_operations', ['id' => $id, 'status' => 'legacy']);
+});
+
+test('audit write failure rolls back a position change and current profile update', function () {
+    Schema::drop('admin_operations');
+    try {
+        $this->actingAs(User::findOrFail(1))->post('/personnel/admin/positions', positionPayload());
+    } catch (QueryException) {
+        // The audit table is unavailable, so the business transaction must abort.
+    }
+    expect(DB::connection('legacy_stage_writer')->table('h06')->count())->toBe(0);
+    $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5019' => 'old'], 'legacy_stage_writer');
 });

@@ -58,6 +58,9 @@ class ProvisionPositionWriter extends Command
         $admin->exec('GRANT UPDATE (`departmentId`,`updatetime`) ON `uchr`.`user` TO '.$identity);
         $admin->exec('GRANT SELECT,INSERT ON `rsxt`.`department_profile_baselines` TO '.$identity);
         $admin->exec('GRANT SELECT,INSERT ON `rsxt`.`department_change_events` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT,UPDATE (`status`,`rolled_back_at`,`rolled_back_by`) ON `rsxt`.`admin_operations` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT ON `rsxt`.`position_profile_baselines` TO '.$identity);
+        $admin->exec('GRANT SELECT,INSERT ON `rsxt`.`grade_profile_baselines` TO '.$identity);
         $copy->connect([...$target, ...$account, 'database' => 'uchr']);
         $settings = [
             'LEGACY_POSITION_DB_USERNAME' => $account['username'],

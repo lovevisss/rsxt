@@ -13,7 +13,7 @@ class GradeWriter
     private const FIELDS = ['bb' => ['grade' => 'h1704', 'start' => 'h1705', 'end' => 'h1710', 'profile' => 'h5071'],
         'df' => ['grade' => 'h1706', 'start' => 'h1707', 'end' => 'h1711', 'profile' => 'h5072']];
 
-    public function __construct(private readonly PositionWriter $positionWriter) {}
+    public function __construct(private readonly PositionWriter $positionWriter, private readonly AdminOperationLog $log) {}
 
     public function connectionName(): string
     {
@@ -64,12 +64,12 @@ class GradeWriter
     /** @param list<array<string, string|null>> $rows
      * @return array{created:int,skipped:int}
      */
-    public function createMany(array $rows, User $actor): array
+    public function createMany(array $rows, User $actor, bool $import = false): array
     {
         $connection = DB::connection($this->connectionName());
         $created = [];
         $skipped = 0;
-        $connection->transaction(function () use ($connection, $rows, $actor, &$created, &$skipped): void {
+        $connection->transaction(function () use ($connection, $rows, $actor, $import, &$created, &$skipped): void {
             foreach ($rows as $row) {
                 $this->lockProfile($connection, $row['employee_number']);
                 if ($this->duplicateExists($row, $this->connectionName())) {
@@ -82,12 +82,14 @@ class GradeWriter
                     'CreatorId' => $actor->Id, 'yndelete' => '0']);
                 $connection->table('h17')->where('Id', $id)->update(['h1708' => (string) $id]);
                 $this->syncProfile($connection, $row['employee_number']);
-                $created[] = ['id' => $id, 'row' => $row];
+                $created[] = ['record_id' => $id, 'before' => null,
+                    'after' => $this->log->snapshot($connection, 'grade', $id)];
+            }
+            if ($created !== []) {
+                $this->log->record($connection, 'grade', $import ? 'imported' : 'created',
+                    $actor->Id, count($rows) === 1 ? $rows[0]['employee_number'] : null, $created);
             }
         });
-        foreach ($created as $item) {
-            $this->event('created', $item['row']['employee_number'], $item['id'], $actor->Id, $item['row']);
-        }
 
         return ['created' => count($created), 'skipped' => $skipped];
     }
@@ -96,11 +98,11 @@ class GradeWriter
     public function change(int $id, array $row, string $version, User $actor): void
     {
         $connection = DB::connection($this->connectionName());
-        $oldNumber = null;
-        $connection->transaction(function () use ($connection, $id, $row, $version, &$oldNumber): void {
+        $connection->transaction(function () use ($connection, $id, $row, $version, $actor): void {
             $existing = $connection->table('h17')->where('Id', $id)->where('yndelete', '0')->lockForUpdate()->first();
             abort_if($existing === null, 404);
             abort_unless(hash_equals($this->version($existing), $version), 409, '记录已变化，请刷新后重试。');
+            $before = $this->log->snapshot($connection, 'grade', $id);
             $oldNumber = (string) $existing->h1702;
             $this->lockProfile($connection, $oldNumber);
             if ($row['employee_number'] !== $oldNumber) {
@@ -114,31 +116,35 @@ class GradeWriter
             if ($row['employee_number'] !== $oldNumber) {
                 $this->syncProfile($connection, $row['employee_number']);
             }
+            $this->log->record($connection, 'grade', 'updated', $actor->Id, $row['employee_number'],
+                [['record_id' => $id, 'before' => $before, 'after' => $this->log->snapshot($connection, 'grade', $id)]]);
         });
-        $this->event('updated', $row['employee_number'], $id, $actor->Id, ['old_employee_number' => $oldNumber, 'row' => $row]);
     }
 
     public function delete(int $id, string $version, User $actor): void
     {
         $connection = DB::connection($this->connectionName());
-        $number = null;
-        $connection->transaction(function () use ($connection, $id, $version, &$number): void {
+        $connection->transaction(function () use ($connection, $id, $version, $actor): void {
             $existing = $connection->table('h17')->where('Id', $id)->where('yndelete', '0')->lockForUpdate()->first();
             abort_if($existing === null, 404);
             abort_unless(hash_equals($this->version($existing), $version), 409, '记录已变化，请刷新后重试。');
+            $before = $this->log->snapshot($connection, 'grade', $id);
             $number = (string) $existing->h1702;
             $this->lockProfile($connection, $number);
             $this->rememberBaselines($connection, $number);
             $connection->table('h17')->where('Id', $id)->update(['yndelete' => '1', 'updateTime' => now()]);
             $this->syncProfile($connection, $number);
+            $this->log->record($connection, 'grade', 'deleted', $actor->Id, $number,
+                [['record_id' => $id, 'before' => $before, 'after' => $this->log->snapshot($connection, 'grade', $id)]]);
         });
-        $this->event('deleted', $number, $id, $actor->Id, []);
     }
 
     public function refreshExpired(?string $today = null): int
     {
         $today ??= CarbonImmutable::now('Asia/Shanghai')->toDateString();
-        $numbers = DB::table('grade_profile_baselines')->distinct()->pluck('employee_number');
+        $connection = DB::connection($this->connectionName());
+        $numbers = $this->log->connection($connection)->table($this->log->baselineTable($connection, 'grade'))
+            ->distinct()->pluck('employee_number');
         $changed = 0;
         foreach ($numbers as $number) {
             if ($this->refreshEmployee((string) $number, $today)) {
@@ -151,11 +157,12 @@ class GradeWriter
 
     public function refreshEmployee(string $number, ?string $today = null): bool
     {
-        if (! DB::table('grade_profile_baselines')->where('employee_number', $number)->exists()) {
+        $connection = DB::connection($this->connectionName());
+        if (! $this->log->connection($connection)->table($this->log->baselineTable($connection, 'grade'))
+            ->where('employee_number', $number)->exists()) {
             return false;
         }
         $today ??= CarbonImmutable::now('Asia/Shanghai')->toDateString();
-        $connection = DB::connection($this->connectionName());
         $changed = false;
         $connection->transaction(function () use ($connection, $number, $today, &$changed): void {
             $profile = $connection->table('h50')->where('h5002', $number)->where('yndelete', '0')
@@ -183,12 +190,13 @@ class GradeWriter
         $profile = $connection->table('h50')->where('h5002', $number)->where('yndelete', '0')
             ->first(['h5071', 'h5072']);
         foreach (self::FIELDS as $type => $fields) {
-            DB::table('grade_profile_baselines')->insertOrIgnore(['employee_number' => $number, 'type' => $type,
-                'grade' => $profile->{$fields['profile']}, 'created_at' => now(), 'updated_at' => now()]);
+            $this->log->connection($connection)->table($this->log->baselineTable($connection, 'grade'))
+                ->insertOrIgnore(['employee_number' => $number, 'type' => $type,
+                    'grade' => $profile->{$fields['profile']}, 'created_at' => now(), 'updated_at' => now()]);
         }
     }
 
-    private function syncProfile(Connection $connection, string $number, ?string $today = null): bool
+    public function syncProfile(Connection $connection, string $number, ?string $today = null): bool
     {
         $today ??= CarbonImmutable::now('Asia/Shanghai')->toDateString();
         $updates = [];
@@ -202,7 +210,8 @@ class GradeWriter
                 ->where(fn ($query) => $query->whereNull($fields['end'])->orWhere($fields['end'], '')
                     ->orWhere($fields['end'], '>', $today))
                 ->orderByDesc($fields['start'])->orderByDesc('Id')->first([$fields['grade']]);
-            $baseline = DB::table('grade_profile_baselines')->where('employee_number', $number)->where('type', $type)->first();
+            $baseline = $this->log->connection($connection)->table($this->log->baselineTable($connection, 'grade'))
+                ->where('employee_number', $number)->where('type', $type)->first();
             $grade = $latest ? $latest->{$fields['grade']} : $baseline?->grade;
             if ($grade !== $profile->{$fields['profile']}) {
                 $updates[$fields['profile']] = $grade;

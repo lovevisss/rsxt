@@ -10,7 +10,7 @@ use stdClass;
 
 class DepartmentWriter
 {
-    public function __construct(private readonly PositionWriter $positionWriter) {}
+    public function __construct(private readonly PositionWriter $positionWriter, private readonly AdminOperationLog $log) {}
 
     public function connectionName(): string
     {
@@ -56,12 +56,12 @@ class DepartmentWriter
     /** @param list<array<string, string|null>> $rows
      * @return array{created:int,skipped:int}
      */
-    public function createMany(array $rows, User $actor): array
+    public function createMany(array $rows, User $actor, bool $import = false): array
     {
         $connection = DB::connection($this->connectionName());
         $created = [];
         $skipped = 0;
-        $connection->transaction(function () use ($connection, $rows, $actor, &$created, &$skipped): void {
+        $connection->transaction(function () use ($connection, $rows, $actor, $import, &$created, &$skipped): void {
             foreach ($rows as $row) {
                 $this->lockIdentity($connection, $row['employee_number']);
                 if ($this->duplicateExists($row, $this->connectionName())) {
@@ -74,7 +74,12 @@ class DepartmentWriter
                     'CreatorId' => $actor->Id, 'yndelete' => '0']);
                 $this->syncCurrent($connection, $row['employee_number']);
                 $this->event($connection, 'created', $row['employee_number'], $id, $actor->Id, $row);
-                $created[] = ['id' => $id, 'row' => $row];
+                $created[] = ['record_id' => $id, 'before' => null,
+                    'after' => $this->log->snapshot($connection, 'department', $id)];
+            }
+            if ($created !== []) {
+                $this->log->record($connection, 'department', $import ? 'imported' : 'created',
+                    $actor->Id, count($rows) === 1 ? $rows[0]['employee_number'] : null, $created);
             }
         });
 
@@ -85,11 +90,11 @@ class DepartmentWriter
     public function change(int $id, array $row, string $version, User $actor): void
     {
         $connection = DB::connection($this->connectionName());
-        $oldNumber = null;
-        $connection->transaction(function () use ($connection, $id, $row, $version, $actor, &$oldNumber): void {
+        $connection->transaction(function () use ($connection, $id, $row, $version, $actor): void {
             $existing = $connection->table('h54')->where('Id', $id)->where('yndelete', '0')->lockForUpdate()->first();
             abort_if($existing === null, 404);
             abort_unless(hash_equals($this->version($existing), $version), 409, '记录已变化，请刷新后重试。');
+            $before = $this->log->snapshot($connection, 'department', $id);
             $oldNumber = (string) $existing->h5402;
             $this->lockIdentity($connection, $oldNumber);
             if ($row['employee_number'] !== $oldNumber) {
@@ -105,23 +110,27 @@ class DepartmentWriter
             }
             $this->event($connection, 'updated', $row['employee_number'], $id, $actor->Id,
                 ['old_employee_number' => $oldNumber, 'row' => $row]);
+            $this->log->record($connection, 'department', 'updated', $actor->Id, $row['employee_number'],
+                [['record_id' => $id, 'before' => $before, 'after' => $this->log->snapshot($connection, 'department', $id)]]);
         });
     }
 
     public function delete(int $id, string $version, User $actor): void
     {
         $connection = DB::connection($this->connectionName());
-        $number = null;
-        $connection->transaction(function () use ($connection, $id, $version, $actor, &$number): void {
+        $connection->transaction(function () use ($connection, $id, $version, $actor): void {
             $existing = $connection->table('h54')->where('Id', $id)->where('yndelete', '0')->lockForUpdate()->first();
             abort_if($existing === null, 404);
             abort_unless(hash_equals($this->version($existing), $version), 409, '记录已变化，请刷新后重试。');
+            $before = $this->log->snapshot($connection, 'department', $id);
             $number = (string) $existing->h5402;
             $this->lockIdentity($connection, $number);
             $this->rememberBaseline($connection, $number);
             $connection->table('h54')->where('Id', $id)->update(['yndelete' => '1', 'updateTime' => now()]);
             $this->syncCurrent($connection, $number);
             $this->event($connection, 'deleted', $number, $id, $actor->Id, []);
+            $this->log->record($connection, 'department', 'deleted', $actor->Id, $number,
+                [['record_id' => $id, 'before' => $before, 'after' => $this->log->snapshot($connection, 'department', $id)]]);
         });
     }
 
@@ -180,7 +189,7 @@ class DepartmentWriter
         ]);
     }
 
-    private function syncCurrent(Connection $connection, string $number, ?string $today = null): bool
+    public function syncCurrent(Connection $connection, string $number, ?string $today = null): bool
     {
         $today ??= CarbonImmutable::now('Asia/Shanghai')->toDateString();
         $latest = $connection->table('h54 as change')

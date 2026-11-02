@@ -10,6 +10,8 @@ use stdClass;
 
 class PositionWriter
 {
+    public function __construct(private readonly AdminOperationLog $log) {}
+
     public function connectionName(): string
     {
         if (config('positions.write_target') === 'stage') {
@@ -45,12 +47,12 @@ class PositionWriter
     /** @param list<array<string, string|null>> $rows
      * @return array{created:int,skipped:int}
      */
-    public function createMany(array $rows, User $actor): array
+    public function createMany(array $rows, User $actor, bool $import = false): array
     {
         $connection = DB::connection($this->connectionName());
         $created = [];
         $skipped = 0;
-        $connection->transaction(function () use ($connection, $rows, $actor, &$created, &$skipped): void {
+        $connection->transaction(function () use ($connection, $rows, $actor, $import, &$created, &$skipped): void {
             foreach ($rows as $row) {
                 $this->lockProfile($connection, $row['employee_number']);
                 if ($connection->table('h06')->where('h0602', $row['employee_number'])->where('h0615', $row['type'])
@@ -61,13 +63,15 @@ class PositionWriter
                 }
                 $this->rememberBaseline($connection, $row['employee_number'], $row['type']);
                 $id = $connection->table('h06')->insertGetId($this->attributes($row, $actor));
-                $created[] = ['id' => $id, 'row' => $row];
+                $created[] = ['record_id' => $id, 'before' => null,
+                    'after' => $this->log->snapshot($connection, 'position', $id)];
                 $this->syncProfile($connection, $row['employee_number'], $row['type']);
             }
+            if ($created !== []) {
+                $this->log->record($connection, 'position', $import ? 'imported' : 'created',
+                    $actor->Id, count($rows) === 1 ? $rows[0]['employee_number'] : null, $created);
+            }
         });
-        foreach ($created as $item) {
-            $this->event($actor, 'created', $item['row']['employee_number'], $item['id'], $item['row']);
-        }
 
         return ['created' => count($created), 'skipped' => $skipped];
     }
@@ -76,11 +80,11 @@ class PositionWriter
     public function change(int $id, array $row, string $version, User $actor): void
     {
         $connection = DB::connection($this->connectionName());
-        $previous = null;
-        $connection->transaction(function () use ($connection, $id, $row, $version, $actor, &$previous): void {
+        $connection->transaction(function () use ($connection, $id, $row, $version, $actor): void {
             $existing = $connection->table('h06')->where('Id', $id)->where('yndelete', '0')->lockForUpdate()->first();
             abort_if($existing === null, 404);
             abort_unless(hash_equals($this->version($existing), $version), 409, '记录已变化，请刷新后重试。');
+            $before = $this->log->snapshot($connection, 'position', $id);
             $previous = ['employee_number' => $existing->h0602, 'type' => $existing->h0615];
             $this->lockProfile($connection, $previous['employee_number']);
             if ($row['employee_number'] !== $previous['employee_number']) {
@@ -97,25 +101,26 @@ class PositionWriter
             if ($previous['employee_number'] !== $row['employee_number'] || $previous['type'] !== $row['type']) {
                 $this->syncProfile($connection, $row['employee_number'], $row['type']);
             }
+            $this->log->record($connection, 'position', 'updated', $actor->Id, $row['employee_number'],
+                [['record_id' => $id, 'before' => $before, 'after' => $this->log->snapshot($connection, 'position', $id)]]);
         });
-        $this->event($actor, 'updated', $row['employee_number'], $id, ['before' => $previous, 'after' => $row]);
     }
 
     public function delete(int $id, string $version, User $actor): void
     {
         $connection = DB::connection($this->connectionName());
-        $previous = null;
-        $connection->transaction(function () use ($connection, $id, $version, &$previous): void {
+        $connection->transaction(function () use ($connection, $id, $version, $actor): void {
             $existing = $connection->table('h06')->where('Id', $id)->where('yndelete', '0')->lockForUpdate()->first();
             abort_if($existing === null, 404);
             abort_unless(hash_equals($this->version($existing), $version), 409, '记录已变化，请刷新后重试。');
-            $previous = ['employee_number' => $existing->h0602, 'type' => $existing->h0615];
+            $before = $this->log->snapshot($connection, 'position', $id);
             $this->lockProfile($connection, $existing->h0602);
             $this->rememberBaseline($connection, $existing->h0602, $existing->h0615);
             $connection->table('h06')->where('Id', $id)->update(['yndelete' => '1', 'updateTime' => now()]);
             $this->syncProfile($connection, $existing->h0602, $existing->h0615);
+            $this->log->record($connection, 'position', 'deleted', $actor->Id, $existing->h0602,
+                [['record_id' => $id, 'before' => $before, 'after' => $this->log->snapshot($connection, 'position', $id)]]);
         });
-        $this->event($actor, 'deleted', $previous['employee_number'], $id, $previous);
     }
 
     private function lockProfile(Connection $connection, string $number): void
@@ -125,22 +130,24 @@ class PositionWriter
 
     private function rememberBaseline(Connection $connection, string $number, string $type): void
     {
-        if (DB::table('position_profile_baselines')->where('employee_number', $number)->where('type', $type)->exists()) {
+        $baselines = $this->log->connection($connection)->table($this->log->baselineTable($connection, 'position'));
+        if ($baselines->where('employee_number', $number)->where('type', $type)->exists()) {
             return;
         }
         $fields = $type === 'DF' ? ['h5019', 'h5021'] : ['h5094', 'h5073'];
         $profile = $connection->table('h50')->where('h5002', $number)->where('yndelete', '0')->first($fields);
-        DB::table('position_profile_baselines')->insertOrIgnore([
+        $this->log->connection($connection)->table($this->log->baselineTable($connection, 'position'))->insertOrIgnore([
             'employee_number' => $number, 'type' => $type, 'position' => $profile->{$fields[0]},
             'appointed_at' => $profile->{$fields[1]}, 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 
-    private function syncProfile(Connection $connection, string $number, string $type): void
+    public function syncProfile(Connection $connection, string $number, string $type): void
     {
         $latest = $connection->table('h06')->where('h0602', $number)->where('h0615', $type)
             ->where('yndelete', '0')->orderByDesc('h0609')->orderByDesc('Id')->first(['h0604', 'h0609']);
-        $baseline = DB::table('position_profile_baselines')->where('employee_number', $number)->where('type', $type)->first();
+        $baseline = $this->log->connection($connection)->table($this->log->baselineTable($connection, 'position'))
+            ->where('employee_number', $number)->where('type', $type)->first();
         $fields = $type === 'DF' ? ['h5019', 'h5021'] : ['h5094', 'h5073'];
         $connection->table('h50')->where('h5002', $number)->where('yndelete', '0')->update([
             $fields[0] => $latest ? $latest->h0604 : $baseline?->position,
@@ -158,13 +165,5 @@ class PositionWriter
             'h0604' => $row['new_position'], 'h0605' => $row['note'], 'h0606' => $row['reason'],
             'h0607' => $row['department'], 'h0608' => $row['old_date'], 'h0609' => $row['new_date'],
             'h0615' => $row['type'], 'CreatorId' => $actor->Id, 'yndelete' => '0'];
-    }
-
-    /** @param array<string, mixed> $details */
-    private function event(User $actor, string $action, ?string $number, ?int $recordId, array $details): void
-    {
-        DB::table('position_change_events')->insert(['employee_number' => $number, 'record_id' => $recordId,
-            'actor_user_id' => $actor->Id, 'action' => $action,
-            'details' => json_encode($details, JSON_UNESCAPED_UNICODE), 'created_at' => now()]);
     }
 }

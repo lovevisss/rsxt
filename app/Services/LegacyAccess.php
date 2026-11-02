@@ -22,7 +22,7 @@ class LegacyAccess
 
     public function canOpenModule(User $user, string $module): bool
     {
-        if (in_array($module, ['position_admin', 'grade_admin', 'department_admin', 'admin_accounts'], true)) {
+        if (in_array($module, ['position_admin', 'grade_admin', 'department_admin', 'admin_accounts', 'admin_operations'], true)) {
             return app(PositionAccess::class)->isAdmin($user);
         }
         $definition = config("personnel.modules.$module");

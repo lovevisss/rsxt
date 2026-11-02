@@ -16,6 +16,7 @@ import {
     Layers3,
     Building2,
     ArrowLeftRight,
+    ScrollText,
 } from '@lucide/vue';
 
 type Module = { menu_id: number; table: string; title: string };
@@ -152,6 +153,13 @@ const items = computed(() =>
             href: '/personnel/admin/administrators',
             icon: UsersRound,
             visible: isAdminWorkspace.value && !!props.modules.admin_accounts,
+        },
+        {
+            key: 'admin_operations',
+            title: '操作记录',
+            href: '/personnel/admin/operations',
+            icon: ScrollText,
+            visible: isAdminWorkspace.value && !!props.modules.admin_operations,
         },
     ].filter((item) => item.visible),
 );

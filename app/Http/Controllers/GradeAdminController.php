@@ -141,7 +141,7 @@ class GradeAdminController extends Controller
                 $rows[] = $this->validatedRow($item['row']);
             }
         }
-        $result = $this->writer->createMany($rows, $request->user());
+        $result = $this->writer->createMany($rows, $request->user(), true);
         Storage::disk('local')->delete($path);
         $request->session()->forget('grade_import_token');
 

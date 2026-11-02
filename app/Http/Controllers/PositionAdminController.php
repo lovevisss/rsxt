@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AdminOperationLog;
 use App\Services\LegacyAccess;
 use App\Services\PositionAccess;
 use App\Services\PositionSpreadsheet;
@@ -20,7 +21,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class PositionAdminController extends Controller
 {
     public function __construct(private PositionAccess $access, private PositionWriter $writer,
-        private PositionSpreadsheet $excel, private LegacyAccess $legacy) {}
+        private PositionSpreadsheet $excel, private LegacyAccess $legacy, private AdminOperationLog $operations) {}
 
     public function home(Request $request): Response
     {
@@ -67,9 +68,17 @@ class PositionAdminController extends Controller
         $this->access->requireAdmin($request->user());
         $data = $request->validate(['employee_number' => ['required', 'string', 'max:64']]);
         abort_unless(DB::connection('legacy')->table('user')->where('username', $data['employee_number'])->where('isUse', 1)->exists(), 422, '工号不存在或账号未启用。');
-        DB::table('personnel_admins')->insertOrIgnore(['employee_number' => $data['employee_number'], 'added_by' => $request->user()->Id,
-            'created_at' => now(), 'updated_at' => now()]);
-        $this->audit($request, 'admin_added', $data['employee_number']);
+        DB::transaction(function () use ($data, $request): void {
+            $number = $data['employee_number'];
+            if (DB::table('personnel_admins')->where('employee_number', $number)->lockForUpdate()->exists()) {
+                return;
+            }
+            DB::table('personnel_admins')->insert(['employee_number' => $number, 'added_by' => $request->user()->Id,
+                'created_at' => now(), 'updated_at' => now()]);
+            $after = (array) DB::table('personnel_admins')->where('employee_number', $number)->first();
+            $this->operations->record(DB::connection(), 'administrators', 'admin_added', $request->user()->Id,
+                $number, [['record_id' => $number, 'before' => null, 'after' => $after]]);
+        });
 
         return back()->with('success', '管理员已添加。');
     }
@@ -77,13 +86,15 @@ class PositionAdminController extends Controller
     public function removeAdmin(Request $request, string $number): RedirectResponse
     {
         $this->access->requireAdmin($request->user());
-        DB::transaction(function () use ($number): void {
+        DB::transaction(function () use ($number, $request): void {
             $admins = DB::table('personnel_admins')->lockForUpdate()->get();
             abort_if($admins->count() <= 1, 422, '必须保留至少一名管理员。');
             abort_unless($admins->contains('employee_number', $number), 404);
+            $before = (array) $admins->firstWhere('employee_number', $number);
             DB::table('personnel_admins')->where('employee_number', $number)->delete();
+            $this->operations->record(DB::connection(), 'administrators', 'admin_removed', $request->user()->Id,
+                $number, [['record_id' => $number, 'before' => $before, 'after' => null]]);
         });
-        $this->audit($request, 'admin_removed', $number);
 
         return back()->with('success', '管理员已移除。');
     }
@@ -182,7 +193,7 @@ class PositionAdminController extends Controller
                 $rows[] = $this->validatedRow($item['row']);
             }
         }
-        $result = $this->writer->createMany($rows, $request->user());
+        $result = $this->writer->createMany($rows, $request->user(), true);
         Storage::disk('local')->delete($path);
         $request->session()->forget('position_import_token');
 
@@ -263,11 +274,5 @@ class PositionAdminController extends Controller
         } catch (\RuntimeException) {
             return false;
         }
-    }
-
-    private function audit(Request $request, string $action, string $number): void
-    {
-        DB::table('position_change_events')->insert(['employee_number' => $number, 'actor_user_id' => $request->user()->Id,
-            'action' => $action, 'created_at' => now()]);
     }
 }

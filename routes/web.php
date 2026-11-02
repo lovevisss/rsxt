@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\AdminOperationsController;
 use App\Http\Controllers\DepartmentAdminController;
 use App\Http\Controllers\GradeAdminController;
 use App\Http\Controllers\LeaveController;
@@ -22,6 +23,9 @@ Route::match(['GET', 'POST'], '/auth/cas/slo', SloController::class)
 Route::post('/logout', [PortalAuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/personnel/admin/operations', [AdminOperationsController::class, 'index'])->name('personnel.admin.operations');
+    Route::get('/personnel/admin/operations/{id}', [AdminOperationsController::class, 'show'])->name('personnel.admin.operations.show');
+    Route::post('/personnel/admin/operations/{id}/rollback', [AdminOperationsController::class, 'rollback'])->name('personnel.admin.operations.rollback');
     Route::get('/personnel/admin', [PositionAdminController::class, 'home'])->name('personnel.admin.home');
     Route::get('/personnel/admin/departments', [DepartmentAdminController::class, 'index'])->name('personnel.admin.departments');
     Route::get('/personnel/admin/departments/person', [DepartmentAdminController::class, 'lookup'])->name('personnel.admin.departments.lookup');

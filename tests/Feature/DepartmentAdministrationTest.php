@@ -146,6 +146,18 @@ test('future dates activate in Shanghai refresh and newest deletion falls back',
     $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5003' => 'D2'], 'legacy_stage_writer');
 });
 
+test('department edit rollback restores profile and portal account together', function () {
+    $actor = User::findOrFail(1);
+    $this->actingAs($actor)->post('/personnel/admin/departments', departmentPayload())->assertRedirect();
+    $row = DB::connection('legacy_stage_writer')->table('h54')->first();
+    $this->actingAs($actor)->put('/personnel/admin/departments/'.$row->Id,
+        [...departmentPayload(['target_department' => 'D3']), 'version' => app(DepartmentWriter::class)->version($row)])->assertRedirect();
+    $operation = DB::table('admin_operations')->where('module', 'department')->where('action', 'updated')->first();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5003' => 'D2'], 'legacy_stage_writer');
+    $this->assertDatabaseHas('user', ['username' => 'E002', 'departmentId' => 2], 'legacy_stage_writer');
+});
+
 test('same-day changes use record ID and editing an old record preserves its ID', function () {
     $db = DB::connection('legacy_stage_writer');
     $db->table('h54')->insert(['Id' => 90, 'h5401' => '员工', 'h5402' => 'E002',
@@ -215,4 +227,10 @@ test('import blocks invalid batch, skips duplicates and exposes template', funct
     expect($book->getSheetCount())->toBe(2)->and($book->getSheet(0)->rangeToArray('A1:F1')[0])->toBe(DepartmentSpreadsheet::HEADERS);
     $book->disconnectWorksheets();
     unlink($path);
+    $operation = DB::table('admin_operations')->where('module', 'department')->where('action', 'imported')->first();
+    expect($operation->item_count)->toBe(2);
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5003' => 'D1'], 'legacy_stage_writer');
+    $this->assertDatabaseHas('user', ['username' => 'E002', 'departmentId' => 1], 'legacy_stage_writer');
+    expect(DB::connection('legacy_stage_writer')->table('h54')->where('yndelete', '0')->count())->toBe(0);
 });

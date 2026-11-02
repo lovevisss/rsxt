@@ -6,6 +6,7 @@ import {
     Building2,
     Layers3,
     ShieldCheck,
+    ScrollText,
 } from '@lucide/vue';
 import PersonnelShell from '@/components/personnel/PersonnelShell.vue';
 
@@ -44,6 +45,14 @@ const tools = [
         href: '/personnel/admin/administrators',
         icon: ShieldCheck,
     },
+    {
+        key: 'admin_operations',
+        number: '05',
+        title: '操作记录',
+        description: '查看管理员动作与回滚状态',
+        href: '/personnel/admin/operations',
+        icon: ScrollText,
+    },
 ];
 </script>
 
@@ -81,7 +90,7 @@ const tools = [
                 class="admin-home-card"
             >
                 <div class="admin-home-card-top">
-                    <span>{{ tool.number }} / 04</span
+                    <span>{{ tool.number }} / 05</span
                     ><ArrowUpRight :size="18" />
                 </div>
                 <component :is="tool.icon" :size="29" :stroke-width="1.5" />

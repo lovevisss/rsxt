@@ -5,6 +5,7 @@
 @import './positions.css';
 @import './grades.css';
 @import './departments.css';
+@import './operations.css';
 
 .personnel-nav {
     min-height: 0;

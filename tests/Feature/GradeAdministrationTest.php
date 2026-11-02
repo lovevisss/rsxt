@@ -127,7 +127,7 @@ test('only admins can manage grades and a dual-sided record syncs independently'
     $this->actingAs($actor)->delete('/personnel/admin/grades/'.$row->Id,
         ['version' => app(GradeWriter::class)->version($row)])->assertRedirect();
     $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5071' => 'BB-old', 'h5072' => 'DF-old'], 'legacy_stage_writer');
-    expect(DB::table('grade_change_events')->where('record_id', $row->Id)->count())->toBe(2);
+    expect(DB::table('admin_operations')->where('module', 'grade')->count())->toBe(2);
 });
 
 test('expiry refresh excludes ended BB while retaining active DF and preserves history', function () {
@@ -136,6 +136,17 @@ test('expiry refresh excludes ended BB while retaining active DF and preserves h
     expect(app(GradeWriter::class)->refreshExpired('2099-01-01'))->toBe(1);
     $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5071' => 'BB-old', 'h5072' => '1019'], 'legacy_stage_writer');
     expect(DB::connection('legacy_stage_writer')->table('h17')->where('yndelete', '0')->count())->toBe(1);
+});
+
+test('grade deletion can be rolled back and recalculates both current grades', function () {
+    $actor = User::findOrFail(1);
+    $this->actingAs($actor)->post('/personnel/admin/grades', gradePayload())->assertRedirect();
+    $row = DB::connection('legacy_stage_writer')->table('h17')->first();
+    $this->actingAs($actor)->delete('/personnel/admin/grades/'.$row->Id,
+        ['version' => app(GradeWriter::class)->version($row)])->assertRedirect();
+    $operation = DB::table('admin_operations')->where('module', 'grade')->where('action', 'deleted')->first();
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5071' => '1016', 'h5072' => '1019'], 'legacy_stage_writer');
 });
 
 test('daily refresh activates a future appointment when its start date arrives', function () {
@@ -212,4 +223,9 @@ test('import blocks errors, skips exact duplicates and downloads a reference tem
         ->and($book->getSheet(0)->rangeToArray('A1:H1')[0])->toBe(GradeSpreadsheet::HEADERS);
     $book->disconnectWorksheets();
     unlink($path);
+    $operation = DB::table('admin_operations')->where('module', 'grade')->where('action', 'imported')->first();
+    expect($operation->item_count)->toBe(2);
+    $this->actingAs($actor)->post('/personnel/admin/operations/'.$operation->id.'/rollback')->assertRedirect();
+    $this->assertDatabaseHas('h50', ['h5002' => 'E002', 'h5071' => 'BB-old', 'h5072' => 'DF-old'], 'legacy_stage_writer');
+    expect(DB::connection('legacy_stage_writer')->table('h17')->where('yndelete', '0')->count())->toBe(0);
 });

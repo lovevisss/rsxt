@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\User;
+use App\Services\DepartmentWriter;
+use App\Services\GradeWriter;
 use App\Services\LegacyReadOnlyGuard;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
@@ -89,6 +92,27 @@ beforeEach(function () {
 test('a query string user id cannot authenticate a visitor', function () {
     $this->get('/dashboard?userId=1')->assertRedirect(route('login'));
     $this->get('/sso/callback?userId=1')->assertBadRequest();
+});
+
+test('an administrator can return to the employee dashboard without triggering profile writes', function () {
+    Schema::create('personnel_admins', function (Blueprint $table) {
+        $table->string('employee_number')->primary();
+    });
+    DB::table('personnel_admins')->insert(['employee_number' => 'E001']);
+    config()->set('positions.write_target', 'production');
+    app()->detectEnvironment(fn () => 'production');
+    $this->mock(GradeWriter::class)->shouldNotReceive('refreshEmployee');
+    $this->mock(DepartmentWriter::class)->shouldNotReceive('refreshEmployee');
+
+    $this->actingAs(User::find(1))
+        ->withHeader('X-Inertia', 'true')
+        ->withHeader('X-Inertia-Version', app(HandleInertiaRequests::class)->version(request()))
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertHeader('X-Inertia', 'true')
+        ->assertJsonPath('component', 'Personnel/Dashboard')
+        ->assertJsonPath('props.person.h5003', 'D1')
+        ->assertJsonStructure(['props' => ['modules' => ['admin_accounts']]]);
 });
 
 test('unconfigured portal shows a login page and local preview requires a signed URL', function () {

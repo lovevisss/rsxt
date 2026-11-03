@@ -218,7 +218,7 @@ const items = computed(() =>
                     />
                 </Link>
             </nav>
-            <Link
+            <a
                 v-if="isAdminWorkspace || canSwitchToAdmin"
                 class="personnel-workspace-switch"
                 :href="isAdminWorkspace ? '/dashboard' : '/personnel/admin'"
@@ -226,7 +226,7 @@ const items = computed(() =>
                     isAdminWorkspace ? '返回员工工作台' : '进入管理后台'
                 }}</span
                 ><ArrowRight :size="15"
-            /></Link>
+            /></a>
             <div class="personnel-side-foot">
                 <span class="personnel-live-dot"></span> 与原人事档案同步
                 <small>业务数据来自现有数据库</small>
@@ -243,13 +243,13 @@ const items = computed(() =>
                     <span>/</span> {{ title }}
                 </div>
                 <div class="personnel-user">
-                    <Link
+                    <a
                         v-if="isAdminWorkspace || canSwitchToAdmin"
                         class="personnel-topbar-switch"
                         :href="
                             isAdminWorkspace ? '/dashboard' : '/personnel/admin'
                         "
-                        >{{ isAdminWorkspace ? '返回前台' : '管理后台' }}</Link
+                        >{{ isAdminWorkspace ? '返回前台' : '管理后台' }}</a
                     >
                     <span class="personnel-avatar">{{
                         userName.slice(0, 1)

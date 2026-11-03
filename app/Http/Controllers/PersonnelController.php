@@ -28,7 +28,7 @@ class PersonnelController extends Controller
 
         return Inertia::render('Personnel/Dashboard', [
             'modules' => $available,
-            'person' => $this->profileRow($user),
+            'person' => $this->profileRow($user, ['h5003'], false),
             'assessmentCount' => isset($available['assessments'])
                 ? DB::connection('legacy')->table('h20')->where('h2002', $user->username)->where('yndelete', '0')->count()
                 : null,
@@ -165,13 +165,13 @@ class PersonnelController extends Controller
     }
 
     /** @param list<string>|null $columns */
-    private function profileRow(User $user, ?array $columns = null): ?object
+    private function profileRow(User $user, ?array $columns = null, bool $refresh = true): ?object
     {
         if (! $this->access->canOpen($user, config('personnel.modules.profile.menu_id'))) {
             return null;
         }
 
-        if (! app()->environment('testing') && config('positions.write_target') === 'production') {
+        if ($refresh && ! app()->environment('testing') && config('positions.write_target') === 'production') {
             $gradeWriter = app(GradeWriter::class);
             if ($gradeWriter->available()) {
                 $gradeWriter->refreshEmployee((string) $user->username);
